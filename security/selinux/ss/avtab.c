@@ -24,6 +24,7 @@
 #include "policydb.h"
 
 static struct kmem_cache *avtab_node_cachep __ro_after_init;
+static struct kmem_cache *avtab_trans_cachep __ro_after_init;
 static struct kmem_cache *avtab_xperms_cachep __ro_after_init;
 
 /* Based on MurmurHash3, written by Austin Appleby and placed in the
@@ -71,6 +72,7 @@ avtab_insert_node(struct avtab *h, int hvalue,
 		  const struct avtab_key *key, const struct avtab_datum *datum)
 {
 	struct avtab_node *newnode;
+	struct avtab_trans *trans;
 	struct avtab_extended_perms *xperms;
 	newnode = kmem_cache_zalloc(avtab_node_cachep, GFP_KERNEL);
 	if (newnode == NULL)
@@ -85,6 +87,14 @@ avtab_insert_node(struct avtab *h, int hvalue,
 		}
 		*xperms = *(datum->u.xperms);
 		newnode->datum.u.xperms = xperms;
+	} else if (key->specified & AVTAB_TRANSITION) {
+		trans = kmem_cache_zalloc(avtab_trans_cachep, GFP_KERNEL);
+		if (!trans) {
+			kmem_cache_free(avtab_node_cachep, newnode);
+			return NULL;
+		}
+		*trans = *datum->u.trans;
+		newnode->datum.u.trans = trans;
 	} else {
 		newnode->datum.u.data = datum->u.data;
 	}
@@ -289,9 +299,13 @@ void avtab_destroy(struct avtab *h)
 		while (cur) {
 			temp = cur;
 			cur = cur->next;
-			if (temp->key.specified & AVTAB_XPERMS)
+			if (temp->key.specified & AVTAB_XPERMS) {
 				kmem_cache_free(avtab_xperms_cachep,
 						temp->datum.u.xperms);
+			} else if (temp->key.specified & AVTAB_TRANSITION) {
+				kmem_cache_free(avtab_trans_cachep,
+						temp->datum.u.trans);
+			}
 			kmem_cache_free(avtab_node_cachep, temp);
 		}
 	}
@@ -407,6 +421,7 @@ int avtab_read_item(struct avtab *a, void *fp, struct policydb *pol,
 	u32 items, items2, val, vers = pol->policyvers;
 	struct avtab_key key;
 	struct avtab_datum datum;
+	struct avtab_trans trans;
 	struct avtab_extended_perms xperms;
 	__le32 buf32[ARRAY_SIZE(xperms.perms.p)];
 	int i, rc;
@@ -473,7 +488,16 @@ int avtab_read_item(struct avtab *a, void *fp, struct policydb *pol,
 		for (i = 0; i < ARRAY_SIZE(spec_order); i++) {
 			if (val & spec_order[i]) {
 				key.specified = spec_order[i] | enabled;
-				datum.u.data = le32_to_cpu(buf32[items++]);
+				if (key.specified & AVTAB_TRANSITION) {
+					memset(&trans, 0,
+					       sizeof(struct avtab_trans));
+					trans.otype =
+						le32_to_cpu(buf32[items++]);
+					datum.u.trans = &trans;
+				} else {
+					datum.u.data =
+						le32_to_cpu(buf32[items++]);
+				}
 				rc = insertf(a, &key, &datum, p);
 				if (rc)
 					return rc;
@@ -543,6 +567,15 @@ int avtab_read_item(struct avtab *a, void *fp, struct policydb *pol,
 		for (i = 0; i < ARRAY_SIZE(xperms.perms.p); i++)
 			xperms.perms.p[i] = le32_to_cpu(buf32[i]);
 		datum.u.xperms = &xperms;
+	} else if (key.specified & AVTAB_TRANSITION) {
+		memset(&trans, 0, sizeof(struct avtab_trans));
+		rc = next_entry(buf32, fp, sizeof(u32));
+		if (rc) {
+			pr_err("SELinux: avtab: truncated entry\n");
+			return rc;
+		}
+		trans.otype = le32_to_cpu(*buf32);
+		datum.u.trans = &trans;
 	} else {
 		rc = next_entry(buf32, fp, sizeof(u32));
 		if (rc) {
@@ -551,12 +584,19 @@ int avtab_read_item(struct avtab *a, void *fp, struct policydb *pol,
 		}
 		datum.u.data = le32_to_cpu(*buf32);
 	}
-	if ((key.specified & AVTAB_TYPE) &&
-	    !policydb_type_isvalid(pol, datum.u.data)) {
-		pr_err("SELinux: avtab: invalid type\n");
-		return -EINVAL;
+	if (key.specified & AVTAB_TRANSITION) {
+		if (!policydb_type_isvalid(pol, datum.u.trans->otype)) {
+			pr_err("SELinux: avtab: invalid transition type\n");
+			return -EINVAL;
+		}
+	} else if (key.specified & AVTAB_TYPE) {
+		if (!policydb_type_isvalid(pol, datum.u.data)) {
+			pr_err("SELinux: avtab: invalid type\n");
+			return -EINVAL;
+		}
 	}
-	return insertf(a, &key, &datum, p);
+	rc = insertf(a, &key, &datum, p);
+	return rc;
 }
 
 static int avtab_insertf(struct avtab *a, const struct avtab_key *k,
@@ -635,6 +675,9 @@ int avtab_write_item(struct policydb *p, const struct avtab_node *cur, void *fp)
 			buf32[i] = cpu_to_le32(cur->datum.u.xperms->perms.p[i]);
 		rc = put_entry(buf32, sizeof(u32),
 				ARRAY_SIZE(cur->datum.u.xperms->perms.p), fp);
+	} else if (cur->key.specified & AVTAB_TRANSITION) {
+		buf32[0] = cpu_to_le32(cur->datum.u.trans->otype);
+		rc = put_entry(buf32, sizeof(u32), 1, fp);
 	} else {
 		buf32[0] = cpu_to_le32(cur->datum.u.data);
 		rc = put_entry(buf32, sizeof(u32), 1, fp);
@@ -673,6 +716,9 @@ void __init avtab_cache_init(void)
 	avtab_node_cachep = kmem_cache_create("avtab_node",
 					      sizeof(struct avtab_node),
 					      0, SLAB_PANIC, NULL);
+	avtab_trans_cachep = kmem_cache_create("avtab_trans",
+					       sizeof(struct avtab_trans),
+					       0, SLAB_PANIC, NULL);
 	avtab_xperms_cachep = kmem_cache_create("avtab_extended_perms",
 						sizeof(struct avtab_extended_perms),
 						0, SLAB_PANIC, NULL);

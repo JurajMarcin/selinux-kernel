@@ -1830,7 +1830,10 @@ retry:
 
 	if (avdatum) {
 		/* Use the type from the type transition/member/change rule. */
-		newcontext.type = avdatum->u.data;
+		if (avkey.specified & AVTAB_TRANSITION)
+			newcontext.type = avdatum->u.trans->otype;
+		else
+			newcontext.type = avdatum->u.data;
 	}
 
 	/* if we have a objname this is a file trans check so check those rules */
