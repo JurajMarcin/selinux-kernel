@@ -47,6 +47,10 @@ struct avtab_key {
 	u16 specified;	/* what field is specified */
 };
 
+struct avtab_trans {
+	u32 otype;		/* default resulting type of the new object */
+};
+
 /*
  * For operations that require more than the 32 permissions provided by the avc
  * extended permissions may be used to provide 256 bits of permissions.
@@ -69,7 +73,8 @@ struct avtab_extended_perms {
 
 struct avtab_datum {
 	union {
-		u32 data; /* access vector or type value */
+		u32 data; /* access vector, member or change value */
+		struct avtab_trans *trans;	/* transition value */
 		struct avtab_extended_perms *xperms;
 	} u;
 };
