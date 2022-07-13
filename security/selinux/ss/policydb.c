@@ -157,6 +157,11 @@ static const struct policydb_compat_info policydb_compat[] = {
 		.sym_num	= SYM_NUM,
 		.ocon_num	= OCON_NUM,
 	},
+	{
+		.version	= POLICYDB_VERSION_AVTAB_FTRANS,
+		.sym_num	= SYM_NUM,
+		.ocon_num	= OCON_NUM,
+	},
 };
 
 static const struct policydb_compat_info *policydb_lookup_compat(int version)
@@ -2354,9 +2359,11 @@ int policydb_read(struct policydb *p, void *fp)
 		lra = ra;
 	}
 
-	rc = avtab_filename_trans_read(&p->te_avtab, fp, p);
-	if (rc)
-		goto bad;
+	if (p->policyvers < POLICYDB_VERSION_AVTAB_FTRANS) {
+		rc = avtab_filename_trans_read(&p->te_avtab, fp, p);
+		if (rc)
+			goto bad;
+	}
 
 	rc = policydb_index(p);
 	if (rc)
@@ -3310,9 +3317,11 @@ int policydb_write(struct policydb *p, void *fp)
 	if (rc)
 		return rc;
 
-	rc = avtab_filename_trans_write(p, &p->te_avtab, fp);
-	if (rc)
-		return rc;
+	if (p->policyvers < POLICYDB_VERSION_AVTAB_FTRANS) {
+		rc = avtab_filename_trans_write(p, &p->te_avtab, fp);
+		if (rc)
+			return rc;
+	}
 
 	rc = ocontext_write(p, info, fp);
 	if (rc)

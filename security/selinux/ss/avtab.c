@@ -426,6 +426,96 @@ static const uint16_t spec_order[] = {
 	AVTAB_XPERMS_DONTAUDIT
 };
 
+static int avtab_trans_read_name_trans(struct policydb *pol,
+					   struct symtab *target, void *fp)
+{
+	int rc;
+	__le32 buf32[2];
+	u32 nfnts, i, len, *fnt_otype = NULL;
+	char *name = NULL;
+
+	/* read number of name transitions */
+	rc = next_entry(buf32, fp, sizeof(u32));
+	if (rc)
+		return rc;
+	nfnts = le32_to_cpu(buf32[0]);
+
+	rc = symtab_init(target, nfnts);
+	if (rc)
+		return rc;
+
+	/* read name transitions */
+	for (i = 0; i < nfnts; i++) {
+		rc = -ENOMEM;
+		fnt_otype = kmalloc(sizeof(u32), GFP_KERNEL);
+		if (!fnt_otype)
+			goto exit;
+
+		/* read name transition otype and name length */
+		rc = next_entry(buf32, fp, sizeof(u32) * 2);
+		if (rc)
+			goto exit;
+		*fnt_otype = le32_to_cpu(buf32[0]);
+		len = le32_to_cpu(buf32[1]);
+		if (!policydb_type_isvalid(pol, *fnt_otype)) {
+			pr_err("SELinux: avtab: invalid filename transition "
+			       "type\n");
+			rc = -EINVAL;
+			goto exit;
+		}
+
+		/* read the name */
+		rc = str_read(&name, GFP_KERNEL, fp, len);
+		if (rc)
+			goto exit;
+
+		/* insert to the table */
+		rc = symtab_insert(target, name, fnt_otype);
+		if (rc)
+			goto exit;
+		name = NULL;
+		fnt_otype = NULL;
+	}
+
+exit:
+	kfree(fnt_otype);
+	kfree(name);
+	return rc;
+}
+
+static int avtab_trans_read(void *fp, struct policydb *pol,
+			    struct avtab_trans *trans)
+{
+	int rc;
+	__le32 buf32[1];
+
+	if (pol->policyvers < POLICYDB_VERSION_AVTAB_FTRANS) {
+		rc = next_entry(buf32, fp, sizeof(u32));
+		if (rc) {
+			pr_err("SELinux: avtab: truncated entry\n");
+			return rc;
+		}
+		trans->otype = le32_to_cpu(*buf32);
+		return 0;
+	}
+
+	/* read default otype */
+	rc = next_entry(buf32, fp, sizeof(u32));
+	if (rc)
+		return rc;
+	trans->otype = le32_to_cpu(buf32[0]);
+
+	rc = avtab_trans_read_name_trans(pol, &trans->name_trans, fp);
+	if (rc)
+		goto bad;
+
+	return 0;
+
+bad:
+	avtab_trans_destroy(trans);
+	return rc;
+}
+
 int avtab_read_item(struct avtab *a, void *fp, struct policydb *pol,
 		    int (*insertf)(struct avtab *a, const struct avtab_key *k,
 				   const struct avtab_datum *d, void *p),
@@ -433,7 +523,7 @@ int avtab_read_item(struct avtab *a, void *fp, struct policydb *pol,
 {
 	__le16 buf16[4];
 	u16 enabled;
-	u32 items, items2, val, vers = pol->policyvers;
+	u32 otype, items, items2, val, vers = pol->policyvers;
 	struct avtab_key key;
 	struct avtab_datum datum;
 	struct avtab_trans trans;
@@ -584,12 +674,9 @@ int avtab_read_item(struct avtab *a, void *fp, struct policydb *pol,
 		datum.u.xperms = &xperms;
 	} else if (key.specified & AVTAB_TRANSITION) {
 		memset(&trans, 0, sizeof(struct avtab_trans));
-		rc = next_entry(buf32, fp, sizeof(u32));
-		if (rc) {
-			pr_err("SELinux: avtab: truncated entry\n");
+		rc = avtab_trans_read(fp, pol, &trans);
+		if (rc)
 			return rc;
-		}
-		trans.otype = le32_to_cpu(*buf32);
 		datum.u.trans = &trans;
 	} else {
 		rc = next_entry(buf32, fp, sizeof(u32));
@@ -600,8 +687,21 @@ int avtab_read_item(struct avtab *a, void *fp, struct policydb *pol,
 		datum.u.data = le32_to_cpu(*buf32);
 	}
 	if (key.specified & AVTAB_TRANSITION) {
-		if (!policydb_type_isvalid(pol, datum.u.trans->otype)) {
+		/* if otype is set (non-zero), it must by a valid type */
+		otype = datum.u.trans->otype;
+		if (otype && !policydb_type_isvalid(pol, otype)) {
 			pr_err("SELinux: avtab: invalid transition type\n");
+			avtab_trans_destroy(&trans);
+			return -EINVAL;
+		}
+		/*
+		 * also each transition entry must meet at least one condition
+		 * to be considered non-empty:
+		 *  - set (non-zero) otype
+		 *  - non-empty filename transitions table
+		 */
+		if (!otype && !datum.u.trans->name_trans.table.nel) {
+			pr_err("SELinux: avtab: empty transition\n");
 			avtab_trans_destroy(&trans);
 			return -EINVAL;
 		}
@@ -667,6 +767,59 @@ bad:
 	goto out;
 }
 
+static int avtab_trans_write_helper(void *k, void *d, void *fp)
+{
+	char *name = k;
+	u32 *otype = d;
+	int rc;
+	__le32 buf32[2];
+	u32 len;
+
+	/* write filename transition otype and name length */
+	len = strlen(name);
+	buf32[0] = cpu_to_le32(*otype);
+	buf32[1] = cpu_to_le32(len);
+	rc = put_entry(buf32, sizeof(u32), 2, fp);
+	if (rc)
+		return rc;
+
+	/* write filename transition name */
+	rc = put_entry(name, sizeof(char), len, fp);
+	if (rc)
+		return rc;
+
+	return 0;
+}
+
+static int avtab_trans_write(struct policydb *p, struct avtab_trans *cur,
+			     void *fp)
+{
+	int rc;
+	__le32 buf32[2];
+
+	if (p->policyvers >= POLICYDB_VERSION_AVTAB_FTRANS) {
+		/* write otype and number of filename transitions */
+		buf32[0] = cpu_to_le32(cur->otype);
+		buf32[1] = cpu_to_le32(cur->name_trans.table.nel);
+		rc = put_entry(buf32, sizeof(u32), 2, fp);
+		if (rc)
+			return rc;
+
+		/* write filename transitions */
+		rc = hashtab_map(&cur->name_trans.table,
+				 avtab_trans_write_helper, fp);
+		if (rc)
+			return rc;
+	} else if (cur->otype) {
+		buf32[0] = cpu_to_le32(cur->otype);
+		rc = put_entry(buf32, sizeof(u32), 1, fp);
+		if (rc)
+			return rc;
+	}
+
+	return 0;
+}
+
 int avtab_write_item(struct policydb *p, const struct avtab_node *cur, void *fp)
 {
 	__le16 buf16[4];
@@ -674,7 +827,8 @@ int avtab_write_item(struct policydb *p, const struct avtab_node *cur, void *fp)
 	int rc;
 	unsigned int i;
 
-	if (cur->key.specified & AVTAB_TRANSITION &&
+	if (p->policyvers < POLICYDB_VERSION_AVTAB_FTRANS &&
+	    cur->key.specified & AVTAB_TRANSITION &&
 	    !cur->datum.u.trans->otype)
 		return 0;
 
@@ -698,8 +852,7 @@ int avtab_write_item(struct policydb *p, const struct avtab_node *cur, void *fp)
 		rc = put_entry(buf32, sizeof(u32),
 				ARRAY_SIZE(cur->datum.u.xperms->perms.p), fp);
 	} else if (cur->key.specified & AVTAB_TRANSITION) {
-		buf32[0] = cpu_to_le32(cur->datum.u.trans->otype);
-		rc = put_entry(buf32, sizeof(u32), 1, fp);
+		rc = avtab_trans_write(p, cur->datum.u.trans, fp);
 	} else {
 		buf32[0] = cpu_to_le32(cur->datum.u.data);
 		rc = put_entry(buf32, sizeof(u32), 1, fp);
@@ -715,8 +868,23 @@ int avtab_write(struct policydb *p, struct avtab *a, void *fp)
 	int rc = 0;
 	struct avtab_node *cur;
 	__le32 buf[1];
+	u32 nel;
 
-	buf[0] = cpu_to_le32(a->nel);
+	nel = a->nel;
+	if (p->policyvers < POLICYDB_VERSION_AVTAB_FTRANS) {
+		/*
+		 * in older version, skip entries with only filename transition,
+		 * as these are written out separately
+		 */
+		for (i = 0; i < a->nslot; i++) {
+			for (cur = a->htable[i]; cur; cur = cur->next) {
+				if (cur->key.specified & AVTAB_TRANSITION &&
+				    !cur->datum.u.trans->otype)
+					nel--;
+			}
+		}
+	}
+	buf[0] = cpu_to_le32(nel);
 	rc = put_entry(buf, sizeof(u32), 1, fp);
 	if (rc)
 		return rc;
