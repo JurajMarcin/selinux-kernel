@@ -1661,36 +1661,6 @@ out:
 	return -EACCES;
 }
 
-static void filename_compute_type(struct policydb *policydb,
-				  struct context *newcontext,
-				  u32 stype, u32 ttype, u16 tclass,
-				  const char *objname)
-{
-	struct filename_trans_key ft;
-	struct filename_trans_datum *datum;
-
-	/*
-	 * Most filename trans rules are going to live in specific directories
-	 * like /dev or /var/run.  This bitmap will quickly skip rule searches
-	 * if the ttype does not contain any rules.
-	 */
-	if (!ebitmap_get_bit(&policydb->filename_trans_ttypes, ttype))
-		return;
-
-	ft.ttype = ttype;
-	ft.tclass = tclass;
-	ft.name = objname;
-
-	datum = policydb_filenametr_search(policydb, &ft);
-	while (datum) {
-		if (ebitmap_get_bit(&datum->stypes, stype - 1)) {
-			newcontext->type = datum->otype;
-			return;
-		}
-		datum = datum->next;
-	}
-}
-
 static int security_compute_sid(u32 ssid,
 				u32 tsid,
 				u16 orig_tclass,
@@ -1711,6 +1681,7 @@ static int security_compute_sid(u32 ssid,
 	u16 tclass;
 	int rc = 0;
 	bool sock;
+	u32 *otype;
 
 	if (!selinux_initialized()) {
 		switch (orig_tclass) {
@@ -1830,16 +1801,23 @@ retry:
 
 	if (avdatum) {
 		/* Use the type from the type transition/member/change rule. */
-		if (avkey.specified & AVTAB_TRANSITION)
-			newcontext.type = avdatum->u.trans->otype;
-		else
+		if (avkey.specified & AVTAB_TRANSITION) {
+			/*
+			 * use default otype if not empty and then to try to
+			 * find more specific rule using objname
+			 */
+			if (avdatum->u.trans->otype)
+				newcontext.type = avdatum->u.trans->otype;
+			if (objname) {
+				otype = symtab_search(&avdatum->u.trans->name_trans,
+						      objname);
+				if (otype)
+					newcontext.type = *otype;
+			}
+		} else {
 			newcontext.type = avdatum->u.data;
+		}
 	}
-
-	/* if we have a objname this is a file trans check so check those rules */
-	if (objname)
-		filename_compute_type(policydb, &newcontext, scontext->type,
-				      tcontext->type, tclass, objname);
 
 	/* Check for class-specific changes. */
 	if (specified & AVTAB_TRANSITION) {

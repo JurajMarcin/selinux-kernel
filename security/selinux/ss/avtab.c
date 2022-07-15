@@ -22,6 +22,7 @@
 #include <linux/errno.h>
 #include "avtab.h"
 #include "policydb.h"
+#include "hashtab.h"
 
 static struct kmem_cache *avtab_node_cachep __ro_after_init;
 static struct kmem_cache *avtab_trans_cachep __ro_after_init;
@@ -286,6 +287,19 @@ avtab_search_node_next(struct avtab_node *node, int specified)
 	return NULL;
 }
 
+static int avtab_trans_destroy_helper(void *k, void *d, void *args)
+{
+	kfree(k);
+	kfree(d);
+	return 0;
+}
+
+static void avtab_trans_destroy(struct avtab_trans *trans)
+{
+	hashtab_map(&trans->name_trans.table, avtab_trans_destroy_helper, NULL);
+	hashtab_destroy(&trans->name_trans.table);
+}
+
 void avtab_destroy(struct avtab *h)
 {
 	int i;
@@ -303,6 +317,7 @@ void avtab_destroy(struct avtab *h)
 				kmem_cache_free(avtab_xperms_cachep,
 						temp->datum.u.xperms);
 			} else if (temp->key.specified & AVTAB_TRANSITION) {
+				avtab_trans_destroy(temp->datum.u.trans);
 				kmem_cache_free(avtab_trans_cachep,
 						temp->datum.u.trans);
 			}
@@ -587,6 +602,7 @@ int avtab_read_item(struct avtab *a, void *fp, struct policydb *pol,
 	if (key.specified & AVTAB_TRANSITION) {
 		if (!policydb_type_isvalid(pol, datum.u.trans->otype)) {
 			pr_err("SELinux: avtab: invalid transition type\n");
+			avtab_trans_destroy(&trans);
 			return -EINVAL;
 		}
 	} else if (key.specified & AVTAB_TYPE) {
@@ -596,6 +612,8 @@ int avtab_read_item(struct avtab *a, void *fp, struct policydb *pol,
 		}
 	}
 	rc = insertf(a, &key, &datum, p);
+	if (rc && key.specified & AVTAB_TRANSITION)
+		avtab_trans_destroy(&trans);
 	return rc;
 }
 
@@ -655,6 +673,10 @@ int avtab_write_item(struct policydb *p, const struct avtab_node *cur, void *fp)
 	__le32 buf32[ARRAY_SIZE(cur->datum.u.xperms->perms.p)];
 	int rc;
 	unsigned int i;
+
+	if (cur->key.specified & AVTAB_TRANSITION &&
+	    !cur->datum.u.trans->otype)
+		return 0;
 
 	buf16[0] = cpu_to_le16(cur->key.source_type);
 	buf16[1] = cpu_to_le16(cur->key.target_type);
@@ -722,4 +744,498 @@ void __init avtab_cache_init(void)
 	avtab_xperms_cachep = kmem_cache_create("avtab_extended_perms",
 						sizeof(struct avtab_extended_perms),
 						0, SLAB_PANIC, NULL);
+}
+
+/* policydb filename transitions compatibility */
+
+static int avtab_insert_filename_trans(struct avtab *a,
+				       const struct avtab_key *key,
+				       char *name, u32 otype)
+{
+	int rc;
+	struct avtab_node *node;
+	struct avtab_trans new_trans = {0};
+	struct avtab_datum new_datum = {.u.trans = &new_trans};
+	struct avtab_datum *datum;
+	u32 *otype_datum = NULL;
+
+	datum = avtab_search(a, key);
+	if (!datum) {
+		/* 
+		 * insert is acctually unique, but with this function we can get
+		 * the inserted node and therefore the datum
+		 */
+		node = avtab_insert_nonunique(a, key, &new_datum);
+		if (!node)
+			return -ENOMEM;
+		datum = &node->datum;
+	}
+
+	if (hashtab_is_empty(&datum->u.trans->name_trans.table)) {
+		rc = symtab_init(&datum->u.trans->name_trans, 1 << 8);
+		if (rc)
+			return rc;
+	}
+
+	otype_datum = kmalloc(sizeof(u32), GFP_KERNEL);
+	if (!otype_datum)
+		return -ENOMEM;
+	*otype_datum = otype;
+
+	rc = symtab_insert(&datum->u.trans->name_trans, name, otype_datum);
+	if (rc)
+		kfree(otype_datum);
+
+	return rc;
+}
+
+static int filename_trans_read_item(struct avtab *a, void *fp)
+{
+	int rc;
+	__le32 buf32[4];
+	u32 len, otype;
+	char *name = NULL;
+	struct avtab_key key;
+
+	/* read length of the name */
+	rc = next_entry(buf32, fp, sizeof(u32));
+	if (rc)
+		return rc;
+	len = le32_to_cpu(buf32[0]);
+
+	/* read the name */
+	rc = str_read(&name, GFP_KERNEL, fp, len);
+	if (rc)
+		return rc;
+
+	/* read stype, ttype, tclass and otype */
+	rc = next_entry(buf32, fp, sizeof(u32) * 4);
+	if (rc)
+		goto bad;
+
+	key.source_type = le32_to_cpu(buf32[0]);
+	key.target_type = le32_to_cpu(buf32[1]);
+	key.target_class = le32_to_cpu(buf32[2]);
+	key.specified = AVTAB_TRANSITION;
+
+	otype = le32_to_cpu(buf32[3]);
+
+	rc = avtab_insert_filename_trans(a, &key, name, otype);
+	if (rc)
+		goto bad;
+
+	return rc;
+
+bad:
+	kfree(name);
+	return rc;
+}
+
+static int filename_trans_comp_read_item(struct avtab *a, void *fp)
+{
+	int rc;
+	__le32 buf32[3];
+	u32 len, ndatum, i, bit, otype;
+	char *name = NULL, *name_copy = NULL;
+	struct avtab_key key;
+	struct ebitmap stypes;
+	struct ebitmap_node *node;
+
+	/* read length of the name */
+	rc = next_entry(buf32, fp, sizeof(u32));
+	if (rc)
+		return rc;
+	len = le32_to_cpu(*buf32);
+
+	/* read the name */
+	rc = str_read(&name, GFP_KERNEL, fp, len);
+	if (rc)
+		goto out;
+
+	/* read target type, target class and number of elements for key */
+	rc = next_entry(buf32, fp, sizeof(u32) * 3);
+	if (rc)
+		goto out;
+
+	key.specified = AVTAB_TRANSITION;
+	key.target_type = le32_to_cpu(buf32[0]);
+	key.target_class = le32_to_cpu(buf32[1]);
+
+	ndatum = le32_to_cpu(buf32[2]);
+	if (ndatum == 0) {
+		pr_err("SELinux:  Filename transition key with no datum\n");
+		rc = -ENOENT;
+		goto out;
+	}
+
+	for (i = 0; i < ndatum; i++) {
+		rc = ebitmap_read(&stypes, fp);
+		if (rc)
+			goto out;
+
+		rc = next_entry(buf32, fp, sizeof(u32));
+		if (rc) {
+			ebitmap_destroy(&stypes);
+			goto out;
+		}
+		otype = le32_to_cpu(*buf32);
+
+		ebitmap_for_each_positive_bit(&stypes, node, bit) {
+			key.source_type = bit + 1;
+
+			name_copy = kmemdup(name, len + 1, GFP_KERNEL);
+			if (!name_copy) {
+				ebitmap_destroy(&stypes);
+				goto out;
+			}
+
+			rc = avtab_insert_filename_trans(a, &key, name_copy,
+							 otype);
+			if (rc) {
+				ebitmap_destroy(&stypes);
+				kfree(name_copy);
+				goto out;
+			}
+		}
+
+		ebitmap_destroy(&stypes);
+	}
+	rc = 0;
+
+out:
+	kfree(name);
+	return rc;
+}
+
+int avtab_filename_trans_read(struct avtab *a, void *fp, struct policydb *p)
+{
+	int rc;
+	__le32 buf[1];
+	u32 nel, i;
+
+	if (p->policyvers < POLICYDB_VERSION_FILENAME_TRANS)
+		return 0;
+
+	rc = next_entry(buf, fp, sizeof(u32));
+	if (rc)
+		return rc;
+	nel = le32_to_cpu(buf[0]);
+
+	if (p->policyvers < POLICYDB_VERSION_COMP_FTRANS) {
+		for (i = 0; i < nel; i++) {
+			rc = filename_trans_read_item(a, fp);
+			if (rc)
+				return rc;
+		}
+	} else {
+		for (i = 0; i < nel; i++) {
+			rc = filename_trans_comp_read_item(a, fp);
+			if (rc)
+				return rc;
+		}
+	}
+
+	return 0;
+}
+
+
+struct filenametr_write_args {
+	void *fp;
+	struct avtab_key *key;
+};
+
+static int filenametr_write_helper(void *k, void *d, void *a)
+{
+	char *name = k;
+	u32 *otype = d;
+	struct filenametr_write_args *args = a;
+	int rc;
+	u32 len;
+	__le32 buf32[4];
+
+	len = strlen(name);
+	buf32[0] = cpu_to_le32(len);
+	rc = put_entry(buf32, sizeof(u32), 1, args->fp);
+	if (rc)
+		return rc;
+
+	rc = put_entry(name, sizeof(char), len, args->fp);
+	if (rc)
+		return rc;
+
+	buf32[0] = cpu_to_le32(args->key->source_type);
+	buf32[1] = cpu_to_le32(args->key->target_type);
+	buf32[2] = cpu_to_le32(args->key->target_class);
+	buf32[3] = cpu_to_le32(*otype);
+
+	rc = put_entry(buf32, sizeof(u32), 4, args->fp);
+	if (rc)
+		return rc;
+
+	return 0;
+}
+
+struct filenametr_key {
+	u32 ttype;		/* parent dir context */
+	u16 tclass;		/* class of new object */
+	const char *name;	/* last path component */
+};
+
+struct filenametr_datum {
+	struct ebitmap stypes;	/* bitmap of source types for this otype */
+	u32 otype;		/* resulting type of new object */
+	struct filenametr_datum *next;	/* record for next otype*/
+};
+
+static int filenametr_comp_write_helper(void *k, void *d, void *fp)
+{
+	struct filenametr_key *key = k;
+	struct filenametr_datum *datum = d;
+	__le32 buf[3];
+	int rc;
+	u32 ndatum, len = strlen(key->name);
+	struct filenametr_datum *cur;
+
+	buf[0] = cpu_to_le32(len);
+	rc = put_entry(buf, sizeof(u32), 1, fp);
+	if (rc)
+		return rc;
+
+	rc = put_entry(key->name, sizeof(char), len, fp);
+	if (rc)
+		return rc;
+
+	ndatum = 0;
+	cur = datum;
+	do {
+		ndatum++;
+		cur = cur->next;
+	} while (unlikely(cur));
+
+	buf[0] = cpu_to_le32(key->ttype);
+	buf[1] = cpu_to_le32(key->tclass);
+	buf[2] = cpu_to_le32(ndatum);
+	rc = put_entry(buf, sizeof(u32), 3, fp);
+	if (rc)
+		return rc;
+
+	cur = datum;
+	do {
+		rc = ebitmap_write(&cur->stypes, fp);
+		if (rc)
+			return rc;
+
+		buf[0] = cpu_to_le32(cur->otype);
+		rc = put_entry(buf, sizeof(u32), 1, fp);
+		if (rc)
+			return rc;
+
+		cur = cur->next;
+	} while (unlikely(cur));
+
+	return 0;
+}
+
+static int filenametr_destroy(void *k, void *d, void *args)
+{
+	struct filenametr_key *key = k;
+	struct filenametr_datum *datum = d;
+	struct filenametr_datum *next;
+
+	kfree(key);
+	do {
+		ebitmap_destroy(&datum->stypes);
+		next = datum->next;
+		kfree(datum);
+		datum = next;
+	} while (unlikely(datum));
+	cond_resched();
+	return 0;
+}
+
+static u32 filenametr_hash(const void *k)
+{
+	const struct filenametr_key *ft = k;
+	unsigned long hash;
+	unsigned int byte_num;
+	unsigned char focus;
+
+	hash = ft->ttype ^ ft->tclass;
+
+	byte_num = 0;
+	while ((focus = ft->name[byte_num++]))
+		hash = partial_name_hash(focus, hash);
+	return hash;
+}
+
+static int filenametr_cmp(const void *k1, const void *k2)
+{
+	const struct filenametr_key *ft1 = k1;
+	const struct filenametr_key *ft2 = k2;
+	int v;
+
+	v = ft1->ttype - ft2->ttype;
+	if (v)
+		return v;
+
+	v = ft1->tclass - ft2->tclass;
+	if (v)
+		return v;
+
+	return strcmp(ft1->name, ft2->name);
+}
+
+static const struct hashtab_key_params filenametr_key_params = {
+	.hash = filenametr_hash,
+	.cmp = filenametr_cmp,
+};
+
+struct filenametr_tab_insert_args {
+	struct avtab_key *key;
+	struct hashtab *tab;
+};
+
+static int filenametr_tab_insert(void *k, void *d, void *a)
+{
+	char *name = k;
+	u32 *otype = d;
+	struct filenametr_tab_insert_args *args	= a;
+	struct filenametr_key key, *ft = NULL;
+	struct filenametr_datum *last, *datum = NULL;
+	int rc;
+
+	key.ttype = args->key->target_type;
+	key.tclass = args->key->target_class;
+	key.name = name;
+
+	last = NULL;
+	datum = hashtab_search(args->tab, &key, filenametr_key_params);
+	while (datum) {
+		if (unlikely(ebitmap_get_bit(&datum->stypes,
+					     args->key->source_type - 1))) {
+			/* conflicting/duplicate rules are ignored */
+			datum = NULL;
+			goto bad;
+		}
+		if (likely(datum->otype == *otype))
+			break;
+		last = datum;
+		datum = datum->next;
+	}
+	if (!datum) {
+		rc = -ENOMEM;
+		datum = kmalloc(sizeof(*datum), GFP_KERNEL);
+		if (!datum)
+			goto bad;
+
+		ebitmap_init(&datum->stypes);
+		datum->otype = *otype;
+		datum->next = NULL;
+
+		if (unlikely(last)) {
+			last->next = datum;
+		} else {
+			rc = -ENOMEM;
+			ft = kmemdup(&key, sizeof(key), GFP_KERNEL);
+			if (!ft)
+				goto bad;
+
+			ft->name = kmemdup(key.name, strlen(key.name) + 1,
+					   GFP_KERNEL);
+			if (!ft->name)
+				goto bad;
+
+			rc = hashtab_insert(args->tab, ft, datum,
+					    filenametr_key_params);
+			if (rc)
+				goto bad;
+		}
+	}
+
+	return ebitmap_set_bit(&datum->stypes, args->key->source_type - 1, 1);
+
+bad:
+	if (ft)
+		kfree(ft->name);
+	kfree(ft);
+	kfree(datum);
+	return rc;
+}
+
+int avtab_filename_trans_write(struct policydb *p, struct avtab *a, void *fp)
+{
+	int rc;
+	__le32 buf32[1];
+	u32 i, nel = 0;
+	struct avtab_node *cur;
+	struct hashtab fnts_tab;
+	struct filenametr_tab_insert_args tab_insert_args = {.tab = &fnts_tab};
+	struct filenametr_write_args write_args = {.fp = fp};
+
+	if (p->policyvers < POLICYDB_VERSION_FILENAME_TRANS)
+		return 0;
+
+	/* count number of filename transitions */
+	for (i = 0; i < a->nslot; i++) {
+		for (cur = a->htable[i]; cur; cur = cur->next) {
+			if (cur->key.specified & AVTAB_TRANSITION)
+				nel += cur->datum.u.trans->name_trans.table.nel;
+		}
+	}
+
+	if (p->policyvers < POLICYDB_VERSION_COMP_FTRANS) {
+		buf32[0] = cpu_to_le32(nel);
+		rc = put_entry(buf32, sizeof(u32), 1, fp);
+		if (rc)
+			return rc;
+
+		/* write filename transitions */
+		for (i = 0; i < a->nslot; i++) {
+			for (cur = a->htable[i]; cur; cur = cur->next) {
+				if (cur->key.specified & AVTAB_TRANSITION) {
+					write_args.key = &cur->key;
+					rc = hashtab_map(&cur->datum.u.trans->name_trans.table,
+							 filenametr_write_helper,
+							 &write_args);
+					if (rc)
+						return rc;
+				}
+			}
+		}
+
+		return 0;
+	}
+
+	/* init temp filename transition table */
+	rc = hashtab_init(&fnts_tab, nel);
+	if (rc)
+		return rc;
+
+	for (i = 0; i < a->nslot; i++) {
+		for (cur = a->htable[i]; cur; cur = cur->next) {
+			if (cur->key.specified & AVTAB_TRANSITION) {
+				tab_insert_args.key = &cur->key;
+				rc = hashtab_map(&cur->datum.u.trans->name_trans.table,
+						 filenametr_tab_insert,
+						 &tab_insert_args);
+				if (rc)
+					goto out;
+			}
+		}
+	}
+
+	/* write compressed filename transitions */
+	buf32[0] = cpu_to_le32(fnts_tab.nel);
+	rc = put_entry(buf32, sizeof(u32), 1, fp);
+	if (rc)
+		goto out;
+
+	rc = hashtab_map(&fnts_tab, filenametr_comp_write_helper, fp);
+
+out:
+	/* destroy temp filename transitions table */
+	hashtab_map(&fnts_tab, filenametr_destroy, NULL);
+	hashtab_destroy(&fnts_tab);
+
+	return rc;
 }

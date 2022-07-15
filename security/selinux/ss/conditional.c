@@ -263,6 +263,7 @@ static int cond_insertf(struct avtab *a, const struct avtab_key *k,
 	struct policydb *p = data->p;
 	struct cond_av_list *other = data->other;
 	struct avtab_node *node_ptr;
+	struct avtab_datum *existing;
 	u32 i;
 	bool found;
 
@@ -272,7 +273,10 @@ static int cond_insertf(struct avtab *a, const struct avtab_key *k,
 	 * cond_te_avtab.
 	 */
 	if (k->specified & AVTAB_TYPE) {
-		if (avtab_search(&p->te_avtab, k)) {
+		existing = avtab_search(&p->te_avtab, k);
+		/* empty transition rule is not a conflict */
+		if (existing && !(k->specified & AVTAB_TRANSITION &&
+				  !existing->u.trans->otype)) {
 			pr_err("SELinux: type rule already exists outside of a conditional.\n");
 			return -EINVAL;
 		}
