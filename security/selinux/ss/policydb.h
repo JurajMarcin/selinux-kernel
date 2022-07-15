@@ -91,18 +91,6 @@ struct role_trans_datum {
 	u32 new_role;		/* new role */
 };
 
-struct filename_trans_key {
-	u32 ttype;		/* parent dir context */
-	u16 tclass;		/* class of new object */
-	const char *name;	/* last path component */
-};
-
-struct filename_trans_datum {
-	struct ebitmap stypes;	/* bitmap of source types for this otype */
-	u32 otype;		/* resulting type of new object */
-	struct filename_trans_datum *next;	/* record for next otype*/
-};
-
 struct role_allow {
 	u32 role;		/* current role */
 	u32 new_role;		/* new role */
@@ -265,14 +253,6 @@ struct policydb {
 	/* role transitions */
 	struct hashtab role_tr;
 
-	/* file transitions with the last path component */
-	/* quickly exclude lookups when parent ttype has no rules */
-	struct ebitmap filename_trans_ttypes;
-	/* actual set of filename_trans rules */
-	struct hashtab filename_trans;
-	/* only used if policyvers < POLICYDB_VERSION_COMP_FTRANS */
-	u32 compat_filename_trans_count;
-
 	/* bools indexed by (value - 1) */
 	struct cond_bool_datum **bool_val_to_struct;
 	/* type enforcement conditional access vectors and transitions */
@@ -323,9 +303,6 @@ extern int policydb_type_isvalid(struct policydb *p, unsigned int type);
 extern int policydb_role_isvalid(struct policydb *p, unsigned int role);
 extern int policydb_read(struct policydb *p, void *fp);
 extern int policydb_write(struct policydb *p, void *fp);
-
-extern struct filename_trans_datum *policydb_filenametr_search(
-	struct policydb *p, struct filename_trans_key *key);
 
 extern struct mls_range *policydb_rangetr_search(
 	struct policydb *p, struct range_trans *key);
@@ -378,6 +355,8 @@ static inline int put_entry(const void *buf, size_t bytes, int num, struct polic
 
 	return 0;
 }
+
+extern int str_read(char **strp, gfp_t flags, void *fp, u32 len);
 
 static inline char *sym_name(struct policydb *p, unsigned int sym_num, unsigned int element_nr)
 {
