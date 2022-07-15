@@ -22,6 +22,7 @@
 #define _SS_AVTAB_H_
 
 #include "security.h"
+#include "symtab.h"
 
 struct avtab_key {
 	u16 source_type;	/* source type */
@@ -49,6 +50,7 @@ struct avtab_key {
 
 struct avtab_trans {
 	u32 otype;		/* default resulting type of the new object */
+	struct symtab name_trans;	/* filename transitions */
 };
 
 /*
@@ -120,6 +122,11 @@ struct avtab_node *avtab_search_node_next(struct avtab_node *node, int specified
 
 #define MAX_AVTAB_HASH_BITS 16
 #define MAX_AVTAB_HASH_BUCKETS (1 << MAX_AVTAB_HASH_BITS)
+
+/* policydb filename transitions compatibility */
+
+int avtab_filename_trans_read(struct avtab *a, void *fp, struct policydb *p);
+int avtab_filename_trans_write(struct policydb *p, struct avtab *a, void *fp);
 
 #endif	/* _SS_AVTAB_H_ */
 
