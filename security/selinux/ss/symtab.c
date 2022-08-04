@@ -52,3 +52,6 @@ void *symtab_search(struct symtab *s, const char *name)
 {
 	return hashtab_search(&s->table, name, symtab_key_params);
 }
+
+/* Export for avtab KUnit tests */
+EXPORT_SYMBOL_GPL(symtab_search);

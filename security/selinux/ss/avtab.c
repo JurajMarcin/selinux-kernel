@@ -223,6 +223,9 @@ struct avtab_datum *avtab_search(struct avtab *h, const struct avtab_key *key)
 	return NULL;
 }
 
+/* Export for avtab KUnit tests */
+EXPORT_SYMBOL_GPL(avtab_search);
+
 /* This search function returns a node pointer, and can be used in
  * conjunction with avtab_search_next_node()
  */
@@ -331,6 +334,9 @@ void avtab_destroy(struct avtab *h)
 	h->mask = 0;
 }
 
+/* Export for avtab KUnit tests */
+EXPORT_SYMBOL_GPL(avtab_destroy);
+
 void avtab_init(struct avtab *h)
 {
 	h->htable = NULL;
@@ -377,6 +383,9 @@ int avtab_alloc(struct avtab *h, u32 nrules)
 	pr_debug("SELinux: %d avtab hash slots, %d rules.\n", nslot, nrules);
 	return 0;
 }
+
+/* Export for avtab KUnit tests */
+EXPORT_SYMBOL_GPL(avtab_alloc);
 
 int avtab_alloc_dup(struct avtab *new, const struct avtab *orig)
 {
@@ -767,6 +776,9 @@ bad:
 	goto out;
 }
 
+/* Export for avtab KUnit tests */
+EXPORT_SYMBOL_GPL(avtab_read);
+
 static int avtab_trans_write_helper(void *k, void *d, void *fp)
 {
 	char *name = k;
@@ -900,6 +912,9 @@ int avtab_write(struct policydb *p, struct avtab *a, void *fp)
 
 	return rc;
 }
+
+/* Export for avtab KUnit tests */
+EXPORT_SYMBOL_GPL(avtab_write);
 
 void __init avtab_cache_init(void)
 {
@@ -1106,6 +1121,8 @@ int avtab_filename_trans_read(struct avtab *a, void *fp, struct policydb *p)
 	return 0;
 }
 
+/* Export for avtab KUnit tests */
+EXPORT_SYMBOL_GPL(avtab_filename_trans_read);
 
 struct filenametr_write_args {
 	void *fp;
@@ -1407,3 +1424,6 @@ out:
 
 	return rc;
 }
+
+/* Export for avtab KUnit tests */
+EXPORT_SYMBOL_GPL(avtab_filename_trans_write);

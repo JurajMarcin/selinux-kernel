@@ -68,3 +68,20 @@ config SECURITY_SELINUX_SID2STR_CACHE_SIZE
 	  conversion.  Setting this option to 0 disables the cache completely.
 
 	  If unsure, keep the default value.
+
+config SECURITY_SELINUX_KUNIT_TEST
+	tristate "Tests for SELinux" if !KUNIT_ALL_TESTS
+	depends on KUNIT && SECURITY_SELINUX
+	default KUNIT_ALL_TESTS
+	help
+	  This builds the SELinux KUnit tests.
+
+	  KUnit tests run during boot and output the results to the debug log
+	  in TAP format (https://testanything.org/). Only useful for kernel devs
+	  running KUnit test harness and are not for inclusion into a
+	  production build.
+
+	  For more information on KUnit and unit tests in general please refer
+	  to the KUnit documentation in Documentation/dev-tools/kunit/.
+
+	  If unsure, say N.
