@@ -38,3 +38,5 @@ quiet_cmd_genhdrs = GEN     $(addprefix $(obj)/,$(genhdrs))
 targets += flask.h
 $(obj)/flask.h: scripts/selinux/genheaders/genheaders FORCE
 	$(call if_changed,genhdrs)
+
+obj-$(CONFIG_SECURITY_SELINUX_KUNIT_TEST) += ss/avtab_test.o
