@@ -51,6 +51,8 @@ struct avtab_key {
 struct avtab_trans {
 	u32 otype;		/* default resulting type of the new object */
 	struct symtab name_trans;	/* filename transitions */
+	struct symtab prefix_trans;	/* prefix filename transitions */
+	struct symtab suffix_trans;	/* prefix filename transitions */
 };
 
 /*

@@ -1661,6 +1661,60 @@ out:
 	return -EACCES;
 }
 
+static int security_compute_type_trans_otype(struct avtab_trans *trans,
+					     const char *name, u32 *res_type)
+{
+	u32 *otype;
+	size_t len;
+	char *namedup = NULL;
+	size_t i;
+
+	/*
+	 * use default otype if not empty and then try to find more specific
+	 * rule using name
+	 */
+	if (trans->otype)
+		*res_type = trans->otype;
+	if (!name)
+		return 0;
+
+	/* try to find full name */
+	otype = symtab_search(&trans->name_trans, name);
+	if (otype) {
+		*res_type = *otype;
+		return 0;
+	}
+
+	/* copy name for shortening */
+	len = strlen(name);
+	namedup = kmemdup(name, len + 1, GFP_KERNEL);
+	if (!namedup)
+		return -ENOMEM;
+
+	/* try to find possible prefixes of name starting from the longest */
+	for (i = len; i > 0; i--) {
+		namedup[i] = '\0';
+		otype = symtab_search(&trans->prefix_trans, namedup);
+		if (otype) {
+			kfree(namedup);
+			*res_type = *otype;
+			return 0;
+		}
+	}
+	kfree(namedup);
+
+	/*try to find possible suffixes of name starting from the longest */
+	for (i = 0; i < len; i++) {
+		otype = symtab_search(&trans->suffix_trans, &name[i]);
+		if (otype) {
+			*res_type = *otype;
+			return 0;
+		}
+	}
+
+	return 0;
+}
+
 static int security_compute_sid(u32 ssid,
 				u32 tsid,
 				u16 orig_tclass,
@@ -1802,18 +1856,11 @@ retry:
 	if (avdatum) {
 		/* Use the type from the type transition/member/change rule. */
 		if (avkey.specified & AVTAB_TRANSITION) {
-			/*
-			 * use default otype if not empty and then to try to
-			 * find more specific rule using objname
-			 */
-			if (avdatum->u.trans->otype)
-				newcontext.type = avdatum->u.trans->otype;
-			if (objname) {
-				otype = symtab_search(&avdatum->u.trans->name_trans,
-						      objname);
-				if (otype)
-					newcontext.type = *otype;
-			}
+			rc = security_compute_type_trans_otype(avdatum->u.trans,
+							       objname,
+							       &newcontext.type);
+			if (rc)
+				goto out_unlock;
 		} else {
 			newcontext.type = avdatum->u.data;
 		}

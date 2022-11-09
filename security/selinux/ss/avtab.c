@@ -301,6 +301,12 @@ static void avtab_trans_destroy(struct avtab_trans *trans)
 {
 	hashtab_map(&trans->name_trans.table, avtab_trans_destroy_helper, NULL);
 	hashtab_destroy(&trans->name_trans.table);
+	hashtab_map(&trans->prefix_trans.table, avtab_trans_destroy_helper,
+		    NULL);
+	hashtab_destroy(&trans->prefix_trans.table);
+	hashtab_map(&trans->suffix_trans.table, avtab_trans_destroy_helper,
+		    NULL);
+	hashtab_destroy(&trans->suffix_trans.table);
 }
 
 void avtab_destroy(struct avtab *h)
@@ -518,6 +524,15 @@ static int avtab_trans_read(void *fp, struct policydb *pol,
 	if (rc)
 		goto bad;
 
+
+	if (pol->policyvers >= POLICYDB_VERSION_PREFIX_SUFFIX) {
+		rc = avtab_trans_read_name_trans(pol, &trans->prefix_trans, fp);
+		if (rc)
+			goto bad;
+		rc = avtab_trans_read_name_trans(pol, &trans->suffix_trans, fp);
+		if (rc)
+			goto bad;
+	}
 	return 0;
 
 bad:
@@ -707,9 +722,14 @@ int avtab_read_item(struct avtab *a, void *fp, struct policydb *pol,
 		 * also each transition entry must meet at least one condition
 		 * to be considered non-empty:
 		 *  - set (non-zero) otype
-		 *  - non-empty filename transitions table
+		 *  - non-empty full name transitions table
+		 *  - non-empty prefix name transitions table
+		 *  - non-empty suffix name transitions table
 		 */
-		if (!otype && !datum.u.trans->name_trans.table.nel) {
+		if (!otype &&
+		    !datum.u.trans->name_trans.table.nel &&
+		    !datum.u.trans->prefix_trans.table.nel &&
+		    !datum.u.trans->suffix_trans.table.nel) {
 			pr_err("SELinux: avtab: empty transition\n");
 			avtab_trans_destroy(&trans);
 			return -EINVAL;
@@ -810,18 +830,44 @@ static int avtab_trans_write(struct policydb *p, struct avtab_trans *cur,
 	__le32 buf32[2];
 
 	if (p->policyvers >= POLICYDB_VERSION_AVTAB_FTRANS) {
-		/* write otype and number of filename transitions */
+		/* write otype and number of name transitions */
 		buf32[0] = cpu_to_le32(cur->otype);
 		buf32[1] = cpu_to_le32(cur->name_trans.table.nel);
 		rc = put_entry(buf32, sizeof(u32), 2, fp);
 		if (rc)
 			return rc;
 
-		/* write filename transitions */
+		/* write name transitions */
 		rc = hashtab_map(&cur->name_trans.table,
 				 avtab_trans_write_helper, fp);
 		if (rc)
 			return rc;
+
+		if (p->policyvers >= POLICYDB_VERSION_PREFIX_SUFFIX) {
+			/* write number of prefix transitions */
+			buf32[0] = cpu_to_le32(cur->prefix_trans.table.nel);
+			rc = put_entry(buf32, sizeof(u32), 1, fp);
+			if (rc)
+				return rc;
+
+			/* write prefix transitions */
+			rc = hashtab_map(&cur->prefix_trans.table,
+					 avtab_trans_write_helper, fp);
+			if (rc)
+				return rc;
+
+			/* write number of suffix transitions */
+			buf32[0] = cpu_to_le32(cur->suffix_trans.table.nel);
+			rc = put_entry(buf32, sizeof(u32), 1, fp);
+			if (rc)
+				return rc;
+
+			/* write suffix transitions */
+			rc = hashtab_map(&cur->suffix_trans.table,
+					 avtab_trans_write_helper, fp);
+			if (rc)
+				return rc;
+		}
 	} else if (cur->otype) {
 		buf32[0] = cpu_to_le32(cur->otype);
 		rc = put_entry(buf32, sizeof(u32), 1, fp);
