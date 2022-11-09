@@ -47,10 +47,11 @@
 #define POLICYDB_VERSION_GLBLUB		32
 #define POLICYDB_VERSION_COMP_FTRANS	33 /* compressed filename transitions */
 #define POLICYDB_VERSION_AVTAB_FTRANS	34 /* filename transitions moved to avtab */
+#define POLICYDB_VERSION_PREFIX_SUFFIX	35 /* prefix/suffix support for filename transitions */
 
 /* Range of policy versions we understand*/
 #define POLICYDB_VERSION_MIN   POLICYDB_VERSION_BASE
-#define POLICYDB_VERSION_MAX   POLICYDB_VERSION_AVTAB_FTRANS
+#define POLICYDB_VERSION_MAX   POLICYDB_VERSION_PREFIX_SUFFIX
 
 /* Mask for just the mount related flags */
 #define SE_MNTMASK	0x0f

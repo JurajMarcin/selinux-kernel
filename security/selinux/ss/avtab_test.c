@@ -124,6 +124,8 @@ static void filename_trans_read__simple(struct kunit *test)
 	KUNIT_ASSERT_NOT_NULL(test, node);
 	KUNIT_EXPECT_EQ(test, 0, node->u.trans->otype);
 	KUNIT_EXPECT_EQ(test, 1, node->u.trans->name_trans.nel);
+	KUNIT_EXPECT_EQ(test, 0, node->u.trans->prefix_trans.table.nel);
+	KUNIT_EXPECT_EQ(test, 0, node->u.trans->suffix_trans.table.nel);
 
 	otype = (u32)((uintptr_t)hashtab_str_search(&node->u.trans->name_trans,
 						    "file1"));
@@ -134,6 +136,8 @@ static void filename_trans_read__simple(struct kunit *test)
 	KUNIT_ASSERT_NOT_NULL(test, node);
 	KUNIT_EXPECT_EQ(test, 0, node->u.trans->otype);
 	KUNIT_EXPECT_EQ(test, 2, node->u.trans->name_trans.nel);
+	KUNIT_EXPECT_EQ(test, 0, node->u.trans->prefix_trans.table.nel);
+	KUNIT_EXPECT_EQ(test, 0, node->u.trans->suffix_trans.table.nel);
 
 	otype = (u32)((uintptr_t)hashtab_str_search(&node->u.trans->name_trans,
 						    "file2"));
@@ -213,6 +217,8 @@ static void filename_trans_read__comp_simple(struct kunit *test)
 	KUNIT_ASSERT_NOT_NULL(test, node);
 	KUNIT_EXPECT_EQ(test, 0, node->u.trans->otype);
 	KUNIT_EXPECT_EQ(test, 1, node->u.trans->name_trans.nel);
+	KUNIT_EXPECT_EQ(test, 0, node->u.trans->prefix_trans.table.nel);
+	KUNIT_EXPECT_EQ(test, 0, node->u.trans->suffix_trans.table.nel);
 
 	otype = (u32)((uintptr_t)hashtab_str_search(&node->u.trans->name_trans,
 						    "file1"));
@@ -223,6 +229,8 @@ static void filename_trans_read__comp_simple(struct kunit *test)
 	KUNIT_ASSERT_NOT_NULL(test, node);
 	KUNIT_EXPECT_EQ(test, 0, node->u.trans->otype);
 	KUNIT_EXPECT_EQ(test, 2, node->u.trans->name_trans.nel);
+	KUNIT_EXPECT_EQ(test, 0, node->u.trans->prefix_trans.table.nel);
+	KUNIT_EXPECT_EQ(test, 0, node->u.trans->suffix_trans.table.nel);
 
 	otype = (u32)((uintptr_t)hashtab_str_search(&node->u.trans->name_trans,
 						    "file2"));
@@ -491,12 +499,16 @@ static void read__pre_avtab_ftrans(struct kunit *test)
 	KUNIT_ASSERT_NOT_NULL(test, node);
 	KUNIT_EXPECT_EQ(test, 45, node->u.trans->otype);
 	KUNIT_EXPECT_EQ(test, 0, node->u.trans->name_trans.nel);
+	KUNIT_EXPECT_EQ(test, 0, node->u.trans->prefix_trans.table.nel);
+	KUNIT_EXPECT_EQ(test, 0, node->u.trans->suffix_trans.table.nel);
 
 	key = (struct avtab_key){46, 47, 48, AVTAB_TRANSITION};
 	node = avtab_search(&p.te_avtab, &key);
 	KUNIT_ASSERT_NOT_NULL(test, node);
 	KUNIT_EXPECT_EQ(test, 49, node->u.trans->otype);
 	KUNIT_EXPECT_EQ(test, 0, node->u.trans->name_trans.nel);
+	KUNIT_EXPECT_EQ(test, 0, node->u.trans->prefix_trans.table.nel);
+	KUNIT_EXPECT_EQ(test, 0, node->u.trans->suffix_trans.table.nel);
 
 	avtab_destroy(&p.te_avtab);
 }
@@ -553,6 +565,8 @@ static void read__simple(struct kunit *test)
 	KUNIT_ASSERT_NOT_NULL(test, node);
 	KUNIT_EXPECT_EQ(test, 41, node->u.trans->otype);
 	KUNIT_EXPECT_EQ(test, 1, node->u.trans->name_trans.nel);
+	KUNIT_EXPECT_EQ(test, 0, node->u.trans->prefix_trans.table.nel);
+	KUNIT_EXPECT_EQ(test, 0, node->u.trans->suffix_trans.table.nel);
 
 	otype = (u32)((uintptr_t)hashtab_str_search(&node->u.trans->name_trans,
 						    "file1"));
@@ -563,6 +577,8 @@ static void read__simple(struct kunit *test)
 	KUNIT_ASSERT_NOT_NULL(test, node);
 	KUNIT_EXPECT_EQ(test, 40, node->u.trans->otype);
 	KUNIT_EXPECT_EQ(test, 2, node->u.trans->name_trans.nel);
+	KUNIT_EXPECT_EQ(test, 0, node->u.trans->prefix_trans.table.nel);
+	KUNIT_EXPECT_EQ(test, 0, node->u.trans->suffix_trans.table.nel);
 
 	otype = (u32)((uintptr_t)hashtab_str_search(&node->u.trans->name_trans,
 						    "file2"));
