@@ -162,6 +162,11 @@ static const struct policydb_compat_info policydb_compat[] = {
 		.sym_num	= SYM_NUM,
 		.ocon_num	= OCON_NUM,
 	},
+	{
+		.version	= POLICYDB_VERSION_PREFIX_SUFFIX,
+		.sym_num	= SYM_NUM,
+		.ocon_num	= OCON_NUM,
+	},
 };
 
 static const struct policydb_compat_info *policydb_lookup_compat(int version)
