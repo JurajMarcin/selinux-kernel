@@ -1103,7 +1103,7 @@ static int filenametr_tab_insert(void *k, void *d, void *a)
 	struct filenametr_tab_insert_args *args	= a;
 	struct filenametr_key key, *ft = NULL;
 	struct filenametr_datum *last, *datum = NULL;
-	int rc;
+	int rc = -1;
 
 	key.ttype = args->key->target_type;
 	key.tclass = args->key->target_class;
