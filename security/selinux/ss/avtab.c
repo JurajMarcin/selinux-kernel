@@ -296,8 +296,8 @@ static int avtab_trans_destroy_helper(void *k, void *d, void *args)
 
 static void avtab_trans_destroy(struct avtab_trans *trans)
 {
-	hashtab_map(&trans->name_trans.table, avtab_trans_destroy_helper, NULL);
-	hashtab_destroy(&trans->name_trans.table);
+	hashtab_map(&trans->name_trans, avtab_trans_destroy_helper, NULL);
+	hashtab_destroy(&trans->name_trans);
 }
 
 void avtab_destroy(struct avtab *h)
@@ -771,8 +771,8 @@ static int avtab_insert_filename_trans(struct avtab *a,
 		datum = &node->datum;
 	}
 
-	if (hashtab_is_empty(&datum->u.trans->name_trans.table)) {
-		rc = symtab_init(&datum->u.trans->name_trans, 1 << 8);
+	if (hashtab_is_empty(&datum->u.trans->name_trans)) {
+		rc = hashtab_init(&datum->u.trans->name_trans, 1 << 8);
 		if (rc)
 			return rc;
 	}
@@ -782,7 +782,7 @@ static int avtab_insert_filename_trans(struct avtab *a,
 		return -ENOMEM;
 	*otype_datum = otype;
 
-	rc = symtab_insert(&datum->u.trans->name_trans, name, otype_datum);
+	rc = hashtab_str_insert(&datum->u.trans->name_trans, name, otype_datum);
 	if (rc)
 		kfree(otype_datum);
 
@@ -1180,7 +1180,7 @@ int avtab_filename_trans_write(struct policydb *p, struct avtab *a, void *fp)
 	for (i = 0; i < a->nslot; i++) {
 		for (cur = a->htable[i]; cur; cur = cur->next) {
 			if (cur->key.specified & AVTAB_TRANSITION)
-				nel += cur->datum.u.trans->name_trans.table.nel;
+				nel += cur->datum.u.trans->name_trans.nel;
 		}
 	}
 
@@ -1195,7 +1195,7 @@ int avtab_filename_trans_write(struct policydb *p, struct avtab *a, void *fp)
 			for (cur = a->htable[i]; cur; cur = cur->next) {
 				if (cur->key.specified & AVTAB_TRANSITION) {
 					write_args.key = &cur->key;
-					rc = hashtab_map(&cur->datum.u.trans->name_trans.table,
+					rc = hashtab_map(&cur->datum.u.trans->name_trans,
 							 filenametr_write_helper,
 							 &write_args);
 					if (rc)
@@ -1216,7 +1216,7 @@ int avtab_filename_trans_write(struct policydb *p, struct avtab *a, void *fp)
 		for (cur = a->htable[i]; cur; cur = cur->next) {
 			if (cur->key.specified & AVTAB_TRANSITION) {
 				tab_insert_args.key = &cur->key;
-				rc = hashtab_map(&cur->datum.u.trans->name_trans.table,
+				rc = hashtab_map(&cur->datum.u.trans->name_trans,
 						 filenametr_tab_insert,
 						 &tab_insert_args);
 				if (rc)

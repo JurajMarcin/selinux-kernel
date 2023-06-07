@@ -1809,8 +1809,8 @@ retry:
 			if (avdatum->u.trans->otype)
 				newcontext.type = avdatum->u.trans->otype;
 			if (objname) {
-				otype = symtab_search(&avdatum->u.trans->name_trans,
-						      objname);
+				otype = hashtab_str_search(&avdatum->u.trans->name_trans,
+						      	   objname);
 				if (otype)
 					newcontext.type = *otype;
 			}
