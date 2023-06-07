@@ -1694,7 +1694,7 @@ static int security_compute_type_trans_otype(struct avtab_trans *trans,
 	/* try to find possible prefixes of name starting from the longest */
 	for (i = len; i > 0; i--) {
 		namedup[i] = '\0';
-		otype = symtab_search(&trans->prefix_trans, namedup);
+		otype = hashtab_str_search(&trans->prefix_trans, namedup);
 		if (otype) {
 			kfree(namedup);
 			*res_type = *otype;
@@ -1705,7 +1705,7 @@ static int security_compute_type_trans_otype(struct avtab_trans *trans,
 
 	/*try to find possible suffixes of name starting from the longest */
 	for (i = 0; i < len; i++) {
-		otype = symtab_search(&trans->suffix_trans, &name[i]);
+		otype = hashtab_str_search(&trans->suffix_trans, &name[i]);
 		if (otype) {
 			*res_type = *otype;
 			return 0;
