@@ -228,3 +228,6 @@ void *hashtab_str_search(struct hashtab *h, const char *key)
 {
 	return hashtab_search(h, key, hashtab_str_key_params);
 }
+
+/* Export for avtab KUnit tests */
+EXPORT_SYMBOL_GPL(hashtab_str_search);
