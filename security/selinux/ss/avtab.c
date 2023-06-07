@@ -1042,6 +1042,7 @@ static int filenametr_destroy(void *k, void *d, void *args)
 	struct filenametr_datum *datum = d;
 	struct filenametr_datum *next;
 
+	kfree(key->name);
 	kfree(key);
 	do {
 		ebitmap_destroy(&datum->stypes);
