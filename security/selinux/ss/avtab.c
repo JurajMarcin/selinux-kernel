@@ -427,7 +427,7 @@ static const uint16_t spec_order[] = {
 };
 
 static int avtab_trans_read_name_trans(struct policydb *pol,
-					   struct symtab *target, void *fp)
+				       struct hashtab *target, void *fp)
 {
 	int rc;
 	__le32 buf32[2];
@@ -440,7 +440,7 @@ static int avtab_trans_read_name_trans(struct policydb *pol,
 		return rc;
 	nfnts = le32_to_cpu(buf32[0]);
 
-	rc = symtab_init(target, nfnts);
+	rc = hashtab_init(target, nfnts);
 	if (rc)
 		return rc;
 
@@ -469,7 +469,7 @@ static int avtab_trans_read_name_trans(struct policydb *pol,
 			goto exit;
 
 		/* insert to the table */
-		rc = symtab_insert(target, name, fnt_otype);
+		rc = hashtab_str_insert(target, name, fnt_otype);
 		if (rc)
 			goto exit;
 		name = NULL;
@@ -699,7 +699,7 @@ int avtab_read_item(struct avtab *a, void *fp, struct policydb *pol,
 		 *  - set (non-zero) otype
 		 *  - non-empty filename transitions table
 		 */
-		if (!otype && !datum.u.trans->name_trans.table.nel) {
+		if (!otype && !datum.u.trans->name_trans.nel) {
 			pr_err("SELinux: avtab: empty transition\n");
 			avtab_trans_destroy(&trans);
 			return -EINVAL;
@@ -799,14 +799,14 @@ static int avtab_trans_write(struct policydb *p, struct avtab_trans *cur,
 	if (p->policyvers >= POLICYDB_VERSION_AVTAB_FTRANS) {
 		/* write otype and number of filename transitions */
 		buf32[0] = cpu_to_le32(cur->otype);
-		buf32[1] = cpu_to_le32(cur->name_trans.table.nel);
+		buf32[1] = cpu_to_le32(cur->name_trans.nel);
 		rc = put_entry(buf32, sizeof(u32), 2, fp);
 		if (rc)
 			return rc;
 
 		/* write filename transitions */
-		rc = hashtab_map(&cur->name_trans.table,
-				 avtab_trans_write_helper, fp);
+		rc = hashtab_map(&cur->name_trans, avtab_trans_write_helper,
+				 fp);
 		if (rc)
 			return rc;
 	} else if (cur->otype) {
