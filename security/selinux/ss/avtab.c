@@ -301,12 +301,10 @@ static void avtab_trans_destroy(struct avtab_trans *trans)
 {
 	hashtab_map(&trans->name_trans, avtab_trans_destroy_helper, NULL);
 	hashtab_destroy(&trans->name_trans);
-	hashtab_map(&trans->prefix_trans.table, avtab_trans_destroy_helper,
-		    NULL);
-	hashtab_destroy(&trans->prefix_trans.table);
-	hashtab_map(&trans->suffix_trans.table, avtab_trans_destroy_helper,
-		    NULL);
-	hashtab_destroy(&trans->suffix_trans.table);
+	hashtab_map(&trans->prefix_trans, avtab_trans_destroy_helper, NULL);
+	hashtab_destroy(&trans->prefix_trans);
+	hashtab_map(&trans->suffix_trans, avtab_trans_destroy_helper, NULL);
+	hashtab_destroy(&trans->suffix_trans);
 }
 
 void avtab_destroy(struct avtab *h)
@@ -726,8 +724,8 @@ int avtab_read_item(struct avtab *a, void *fp, struct policydb *pol,
 		 */
 		if (!otype &&
 		    !datum.u.trans->name_trans.nel &&
-		    !datum.u.trans->prefix_trans.table.nel &&
-		    !datum.u.trans->suffix_trans.table.nel) {
+		    !datum.u.trans->prefix_trans.nel &&
+		    !datum.u.trans->suffix_trans.nel) {
 			pr_err("SELinux: avtab: empty transition\n");
 			avtab_trans_destroy(&trans);
 			return -EINVAL;
@@ -843,25 +841,25 @@ static int avtab_trans_write(struct policydb *p, struct avtab_trans *cur,
 
 		if (p->policyvers >= POLICYDB_VERSION_PREFIX_SUFFIX) {
 			/* write number of prefix transitions */
-			buf32[0] = cpu_to_le32(cur->prefix_trans.table.nel);
+			buf32[0] = cpu_to_le32(cur->prefix_trans.nel);
 			rc = put_entry(buf32, sizeof(u32), 1, fp);
 			if (rc)
 				return rc;
 
 			/* write prefix transitions */
-			rc = hashtab_map(&cur->prefix_trans.table,
+			rc = hashtab_map(&cur->prefix_trans,
 					 avtab_trans_write_helper, fp);
 			if (rc)
 				return rc;
 
 			/* write number of suffix transitions */
-			buf32[0] = cpu_to_le32(cur->suffix_trans.table.nel);
+			buf32[0] = cpu_to_le32(cur->suffix_trans.nel);
 			rc = put_entry(buf32, sizeof(u32), 1, fp);
 			if (rc)
 				return rc;
 
 			/* write suffix transitions */
-			rc = hashtab_map(&cur->suffix_trans.table,
+			rc = hashtab_map(&cur->suffix_trans,
 					 avtab_trans_write_helper, fp);
 			if (rc)
 				return rc;
