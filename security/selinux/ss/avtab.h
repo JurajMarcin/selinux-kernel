@@ -22,7 +22,7 @@
 #define _SS_AVTAB_H_
 
 #include "security.h"
-#include "symtab.h"
+#include "hashtab.h"
 
 struct avtab_key {
 	u16 source_type;	/* source type */
@@ -50,7 +50,7 @@ struct avtab_key {
 
 struct avtab_trans {
 	u32 otype;		/* default resulting type of the new object */
-	struct symtab name_trans;	/* filename transitions */
+	struct hashtab name_trans;	/* filename transitions */
 };
 
 /*
