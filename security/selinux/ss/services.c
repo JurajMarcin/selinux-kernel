@@ -1664,7 +1664,7 @@ out:
 static int security_compute_type_trans_otype(struct avtab_trans *trans,
 					     const char *name, u32 *res_type)
 {
-	u32 *otype;
+	u32 otype;
 	size_t len;
 	char *namedup = NULL;
 	size_t i;
@@ -1679,9 +1679,9 @@ static int security_compute_type_trans_otype(struct avtab_trans *trans,
 		return 0;
 
 	/* try to find full name */
-	otype = hashtab_str_search(&trans->name_trans, name);
+	otype = (u32)((uintptr_t)hashtab_str_search(&trans->name_trans, name));
 	if (otype) {
-		*res_type = *otype;
+		*res_type = otype;
 		return 0;
 	}
 
@@ -1694,10 +1694,11 @@ static int security_compute_type_trans_otype(struct avtab_trans *trans,
 	/* try to find possible prefixes of name starting from the longest */
 	for (i = len; i > 0; i--) {
 		namedup[i] = '\0';
-		otype = hashtab_str_search(&trans->prefix_trans, namedup);
+		otype = (u32)((uintptr_t)hashtab_str_search(
+				&trans->prefix_trans, namedup));
 		if (otype) {
 			kfree(namedup);
-			*res_type = *otype;
+			*res_type = otype;
 			return 0;
 		}
 	}
@@ -1705,9 +1706,10 @@ static int security_compute_type_trans_otype(struct avtab_trans *trans,
 
 	/*try to find possible suffixes of name starting from the longest */
 	for (i = 0; i < len; i++) {
-		otype = hashtab_str_search(&trans->suffix_trans, &name[i]);
+		otype = (u32)((uintptr_t)hashtab_str_search(
+				&trans->suffix_trans, &name[i]));
 		if (otype) {
-			*res_type = *otype;
+			*res_type = otype;
 			return 0;
 		}
 	}
