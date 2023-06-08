@@ -1681,7 +1681,7 @@ static int security_compute_sid(u32 ssid,
 	u16 tclass;
 	int rc = 0;
 	bool sock;
-	u32 *otype;
+	u32 otype;
 
 	if (!selinux_initialized()) {
 		switch (orig_tclass) {
@@ -1809,10 +1809,11 @@ retry:
 			if (avdatum->u.trans->otype)
 				newcontext.type = avdatum->u.trans->otype;
 			if (objname) {
-				otype = hashtab_str_search(&avdatum->u.trans->name_trans,
-						      	   objname);
+				otype = (u32)((uintptr_t)hashtab_str_search(
+						&avdatum->u.trans->name_trans,
+						objname));
 				if (otype)
-					newcontext.type = *otype;
+					newcontext.type = otype;
 			}
 		} else {
 			newcontext.type = avdatum->u.data;

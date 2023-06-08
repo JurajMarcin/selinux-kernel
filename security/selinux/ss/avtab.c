@@ -290,7 +290,7 @@ avtab_search_node_next(struct avtab_node *node, int specified)
 static int avtab_trans_destroy_helper(void *k, void *d, void *args)
 {
 	kfree(k);
-	kfree(d);
+	// d is number directly
 	return 0;
 }
 
@@ -757,7 +757,6 @@ static int avtab_insert_filename_trans(struct avtab *a,
 	struct avtab_trans new_trans = {0};
 	struct avtab_datum new_datum = {.u.trans = &new_trans};
 	struct avtab_datum *datum;
-	u32 *otype_datum = NULL;
 
 	datum = avtab_search(a, key);
 	if (!datum) {
@@ -777,16 +776,8 @@ static int avtab_insert_filename_trans(struct avtab *a,
 			return rc;
 	}
 
-	otype_datum = kmalloc(sizeof(u32), GFP_KERNEL);
-	if (!otype_datum)
-		return -ENOMEM;
-	*otype_datum = otype;
-
-	rc = hashtab_str_insert(&datum->u.trans->name_trans, name, otype_datum);
-	if (rc)
-		kfree(otype_datum);
-
-	return rc;
+	return hashtab_str_insert(&datum->u.trans->name_trans, name,
+				  (void *)((uintptr_t)otype));
 }
 
 static int filename_trans_read_item(struct avtab *a, void *fp)
@@ -947,7 +938,7 @@ struct filenametr_write_args {
 static int filenametr_write_helper(void *k, void *d, void *a)
 {
 	char *name = k;
-	u32 *otype = d;
+	u32 otype = (u32)((uintptr_t)d);
 	struct filenametr_write_args *args = a;
 	int rc;
 	u32 len;
@@ -966,7 +957,7 @@ static int filenametr_write_helper(void *k, void *d, void *a)
 	buf32[0] = cpu_to_le32(args->key->source_type);
 	buf32[1] = cpu_to_le32(args->key->target_type);
 	buf32[2] = cpu_to_le32(args->key->target_class);
-	buf32[3] = cpu_to_le32(*otype);
+	buf32[3] = cpu_to_le32(otype);
 
 	rc = put_entry(buf32, sizeof(u32), 4, args->fp);
 	if (rc)
@@ -1099,7 +1090,7 @@ struct filenametr_tab_insert_args {
 static int filenametr_tab_insert(void *k, void *d, void *a)
 {
 	char *name = k;
-	u32 *otype = d;
+	u32 otype = (u32)((uintptr_t)d);
 	struct filenametr_tab_insert_args *args	= a;
 	struct filenametr_key key, *ft = NULL;
 	struct filenametr_datum *last, *datum = NULL;
@@ -1118,7 +1109,7 @@ static int filenametr_tab_insert(void *k, void *d, void *a)
 			datum = NULL;
 			goto bad;
 		}
-		if (likely(datum->otype == *otype))
+		if (likely(datum->otype == otype))
 			break;
 		last = datum;
 		datum = datum->next;
@@ -1130,7 +1121,7 @@ static int filenametr_tab_insert(void *k, void *d, void *a)
 			goto bad;
 
 		ebitmap_init(&datum->stypes);
-		datum->otype = *otype;
+		datum->otype = otype;
 		datum->next = NULL;
 
 		if (unlikely(last)) {
