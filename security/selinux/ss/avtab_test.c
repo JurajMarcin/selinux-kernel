@@ -108,7 +108,7 @@ static void filename_trans_read__simple(struct kunit *test)
 	};
 	struct avtab_key key;
 	struct avtab_datum *node;
-	u32 *otype;
+	u32 otype;
 
 	p.p_types.nprim = 54;
 	p.p_classes.nprim = 49;
@@ -125,9 +125,9 @@ static void filename_trans_read__simple(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0, node->u.trans->otype);
 	KUNIT_EXPECT_EQ(test, 1, node->u.trans->name_trans.nel);
 
-	otype = hashtab_str_search(&node->u.trans->name_trans, "file1");
-	KUNIT_ASSERT_NOT_NULL(test, otype);
-	KUNIT_EXPECT_EQ(test, 45, *otype);
+	otype = (u32)((uintptr_t)hashtab_str_search(&node->u.trans->name_trans,
+						    "file1"));
+	KUNIT_EXPECT_EQ(test, 45, otype);
 
 	key = (struct avtab_key){46, 47, 48, AVTAB_TRANSITION};
 	node = avtab_search(&p.te_avtab, &key);
@@ -135,13 +135,13 @@ static void filename_trans_read__simple(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0, node->u.trans->otype);
 	KUNIT_EXPECT_EQ(test, 2, node->u.trans->name_trans.nel);
 
-	otype = hashtab_str_search(&node->u.trans->name_trans, "file2");
-	KUNIT_ASSERT_NOT_NULL(test, otype);
-	KUNIT_EXPECT_EQ(test, 49, *otype);
+	otype = (u32)((uintptr_t)hashtab_str_search(&node->u.trans->name_trans,
+						    "file2"));
+	KUNIT_EXPECT_EQ(test, 49, otype);
 
-	otype = hashtab_str_search(&node->u.trans->name_trans, "file3");
-	KUNIT_ASSERT_NOT_NULL(test, otype);
-	KUNIT_EXPECT_EQ(test, 53, *otype);
+	otype = (u32)((uintptr_t)hashtab_str_search(&node->u.trans->name_trans,
+						    "file3"));
+	KUNIT_EXPECT_EQ(test, 53, otype);
 
 	avtab_destroy(&p.te_avtab);
 }
@@ -197,7 +197,7 @@ static void filename_trans_read__comp_simple(struct kunit *test)
 	};
 	struct avtab_key key;
 	struct avtab_datum *node;
-	u32 *otype;
+	u32 otype;
 
 	p.p_types.nprim = 54;
 	p.p_classes.nprim = 49;
@@ -214,9 +214,9 @@ static void filename_trans_read__comp_simple(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0, node->u.trans->otype);
 	KUNIT_EXPECT_EQ(test, 1, node->u.trans->name_trans.nel);
 
-	otype = hashtab_str_search(&node->u.trans->name_trans, "file1");
-	KUNIT_ASSERT_NOT_NULL(test, otype);
-	KUNIT_EXPECT_EQ(test, 45, *otype);
+	otype = (u32)((uintptr_t)hashtab_str_search(&node->u.trans->name_trans,
+						    "file1"));
+	KUNIT_EXPECT_EQ(test, 45, otype);
 
 	key = (struct avtab_key){46, 47, 48, AVTAB_TRANSITION};
 	node = avtab_search(&p.te_avtab, &key);
@@ -224,13 +224,13 @@ static void filename_trans_read__comp_simple(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0, node->u.trans->otype);
 	KUNIT_EXPECT_EQ(test, 2, node->u.trans->name_trans.nel);
 
-	otype = hashtab_str_search(&node->u.trans->name_trans, "file2");
-	KUNIT_ASSERT_NOT_NULL(test, otype);
-	KUNIT_EXPECT_EQ(test, 49, *otype);
+	otype = (u32)((uintptr_t)hashtab_str_search(&node->u.trans->name_trans,
+						    "file2"));
+	KUNIT_EXPECT_EQ(test, 49, otype);
 
-	otype = hashtab_str_search(&node->u.trans->name_trans, "file3");
-	KUNIT_ASSERT_NOT_NULL(test, otype);
-	KUNIT_EXPECT_EQ(test, 53, *otype);
+	otype = (u32)((uintptr_t)hashtab_str_search(&node->u.trans->name_trans,
+						    "file3"));
+	KUNIT_EXPECT_EQ(test, 53, otype);
 
 	avtab_destroy(&p.te_avtab);
 }
@@ -337,11 +337,10 @@ static void filename_trans_write__simple(struct kunit *test)
 		.data = data,
 		.len = sizeof(data),
 	};
-	u32 otypes[] = {45, 49, 53};
 	struct hashtab_node nhnodes[] = {
-		{"file1", &otypes[0], NULL},
-		{"file2", &otypes[1], &nhnodes[2]},
-		{"file3", &otypes[2], NULL},
+		{"file1", (void *)((uintptr_t)45), NULL},
+		{"file2", (void *)((uintptr_t)49), &nhnodes[2]},
+		{"file3", (void *)((uintptr_t)53), NULL},
 	};
 	struct hashtab_node *nhtable[] = {&nhnodes[0], &nhnodes[1]};
 	struct avtab_trans transs[] = {
@@ -420,11 +419,10 @@ static void filename_trans_write__comp_simple(struct kunit *test)
 		.data = data,
 		.len = sizeof(data),
 	};
-	u32 otypes[] = {45, 49, 53};
 	struct hashtab_node nhnodes[] = {
-		{"file1", &otypes[0], NULL},
-		{"file2", &otypes[1], &nhnodes[2]},
-		{"file3", &otypes[2], NULL},
+		{"file1", (void *)((uintptr_t)45), NULL},
+		{"file2", (void *)((uintptr_t)49), &nhnodes[2]},
+		{"file3", (void *)((uintptr_t)53), NULL},
 	};
 	struct hashtab_node *nhtable[] = {&nhnodes[0], &nhnodes[1]};
 	struct avtab_trans transs[] = {
@@ -541,7 +539,7 @@ static void read__simple(struct kunit *test)
 	};
 	struct avtab_key key;
 	struct avtab_datum *node;
-	u32 *otype;
+	u32 otype;
 
 	p.p_types.nprim = 54;
 	p.p_classes.nprim = 49;
@@ -556,9 +554,9 @@ static void read__simple(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 41, node->u.trans->otype);
 	KUNIT_EXPECT_EQ(test, 1, node->u.trans->name_trans.nel);
 
-	otype = hashtab_str_search(&node->u.trans->name_trans, "file1");
-	KUNIT_ASSERT_NOT_NULL(test, otype);
-	KUNIT_EXPECT_EQ(test, 45, *otype);
+	otype = (u32)((uintptr_t)hashtab_str_search(&node->u.trans->name_trans,
+						    "file1"));
+	KUNIT_EXPECT_EQ(test, 45, otype);
 
 	key = (struct avtab_key){46, 47, 48, AVTAB_TRANSITION};
 	node = avtab_search(&p.te_avtab, &key);
@@ -566,13 +564,13 @@ static void read__simple(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 40, node->u.trans->otype);
 	KUNIT_EXPECT_EQ(test, 2, node->u.trans->name_trans.nel);
 
-	otype = hashtab_str_search(&node->u.trans->name_trans, "file2");
-	KUNIT_ASSERT_NOT_NULL(test, otype);
-	KUNIT_EXPECT_EQ(test, 49, *otype);
+	otype = (u32)((uintptr_t)hashtab_str_search(&node->u.trans->name_trans,
+						    "file2"));
+	KUNIT_EXPECT_EQ(test, 49, otype);
 
-	otype = hashtab_str_search(&node->u.trans->name_trans, "file3");
-	KUNIT_ASSERT_NOT_NULL(test, otype);
-	KUNIT_EXPECT_EQ(test, 50, *otype);
+	otype = (u32)((uintptr_t)hashtab_str_search(&node->u.trans->name_trans,
+						    "file3"));
+	KUNIT_EXPECT_EQ(test, 50, otype);
 
 	avtab_destroy(&p.te_avtab);
 }
@@ -597,11 +595,10 @@ static void write__pre_avtab_ftrans(struct kunit *test)
 		.data = data,
 		.len = sizeof(data),
 	};
-	u32 otypes[] = {45, 49, 53};
 	struct hashtab_node nhnodes[] = {
-		{"file1", &otypes[0], NULL},
-		{"file2", &otypes[1], &nhnodes[2]},
-		{"file3", &otypes[2], NULL},
+		{"file1", (void *)((uintptr_t)45), NULL},
+		{"file2", (void *)((uintptr_t)49), &nhnodes[2]},
+		{"file3", (void *)((uintptr_t)53), NULL},
 	};
 	struct hashtab_node *nhtable[] = {&nhnodes[0], &nhnodes[1]};
 	struct avtab_trans transs[] = {
@@ -666,11 +663,10 @@ static void write__simple(struct kunit *test)
 		.data = data,
 		.len = sizeof(data),
 	};
-	u32 otypes[] = {45, 49, 50};
 	struct hashtab_node nhnodes[] = {
-		{"file1", &otypes[0], NULL},
-		{"file2", &otypes[1], &nhnodes[2]},
-		{"file3", &otypes[2], NULL},
+		{"file1", (void *)((uintptr_t)45), NULL},
+		{"file2", (void *)((uintptr_t)49), &nhnodes[2]},
+		{"file3", (void *)((uintptr_t)50), NULL},
 	};
 	struct hashtab_node *nhtable[] = {&nhnodes[0], &nhnodes[1]};
 	struct avtab_trans transs[] = {
