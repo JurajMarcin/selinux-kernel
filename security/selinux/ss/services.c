@@ -1735,7 +1735,6 @@ static int security_compute_sid(u32 ssid,
 	u16 tclass;
 	int rc = 0;
 	bool sock;
-	u32 *otype;
 
 	if (!selinux_initialized()) {
 		switch (orig_tclass) {
