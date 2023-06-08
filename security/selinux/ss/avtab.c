@@ -431,7 +431,7 @@ static int avtab_trans_read_name_trans(struct policydb *pol,
 {
 	int rc;
 	__le32 buf32[2];
-	u32 nfnts, i, len, *fnt_otype = NULL;
+	u32 nfnts, i, len, otype;
 	char *name = NULL;
 
 	/* read number of name transitions */
@@ -446,18 +446,13 @@ static int avtab_trans_read_name_trans(struct policydb *pol,
 
 	/* read name transitions */
 	for (i = 0; i < nfnts; i++) {
-		rc = -ENOMEM;
-		fnt_otype = kmalloc(sizeof(u32), GFP_KERNEL);
-		if (!fnt_otype)
-			goto exit;
-
 		/* read name transition otype and name length */
 		rc = next_entry(buf32, fp, sizeof(u32) * 2);
 		if (rc)
 			goto exit;
-		*fnt_otype = le32_to_cpu(buf32[0]);
+		otype = le32_to_cpu(buf32[0]);
 		len = le32_to_cpu(buf32[1]);
-		if (!policydb_type_isvalid(pol, *fnt_otype)) {
+		if (!policydb_type_isvalid(pol, otype)) {
 			pr_err("SELinux: avtab: invalid filename transition type\n");
 			rc = -EINVAL;
 			goto exit;
@@ -469,15 +464,14 @@ static int avtab_trans_read_name_trans(struct policydb *pol,
 			goto exit;
 
 		/* insert to the table */
-		rc = hashtab_str_insert(target, name, fnt_otype);
+		rc = hashtab_str_insert(target, name,
+					(void *)((uintptr_t)otype));
 		if (rc)
 			goto exit;
 		name = NULL;
-		fnt_otype = NULL;
 	}
 
 exit:
-	kfree(fnt_otype);
 	kfree(name);
 	return rc;
 }
@@ -769,14 +763,14 @@ bad:
 static int avtab_trans_write_helper(void *k, void *d, void *fp)
 {
 	char *name = k;
-	u32 *otype = d;
+	u32 otype = (u32)((uintptr_t)d);
 	int rc;
 	__le32 buf32[2];
 	u32 len;
 
 	/* write filename transition otype and name length */
 	len = strlen(name);
-	buf32[0] = cpu_to_le32(*otype);
+	buf32[0] = cpu_to_le32(otype);
 	buf32[1] = cpu_to_le32(len);
 	rc = put_entry(buf32, sizeof(u32), 2, fp);
 	if (rc)
