@@ -145,4 +145,8 @@ int hashtab_duplicate(struct hashtab *new, struct hashtab *orig,
 /* Fill info with some hash table statistics */
 void hashtab_stat(struct hashtab *h, struct hashtab_info *info);
 
+int hashtab_str_insert(struct hashtab *h, char *key, void *datum);
+
+void *hashtab_str_search(struct hashtab *h, const char *key);
+
 #endif	/* _SS_HASHTAB_H */
