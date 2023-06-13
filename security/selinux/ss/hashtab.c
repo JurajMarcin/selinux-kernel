@@ -190,3 +190,41 @@ void __init hashtab_cache_init(void)
 			sizeof(struct hashtab_node),
 			0, SLAB_PANIC, NULL);
 }
+
+static unsigned int hashtab_str_hash(const void *key)
+{
+	const char *p, *keyp;
+	unsigned int size;
+	unsigned int val;
+
+	val = 0;
+	keyp = key;
+	size = strlen(keyp);
+	for (p = keyp; (p - keyp) < size; p++)
+		val = (val << 4 | (val >> (8*sizeof(unsigned int)-4))) ^ (*p);
+	return val;
+}
+
+static int hashtab_str_cmp(const void *key1, const void *key2)
+{
+	const char *keyp1, *keyp2;
+
+	keyp1 = key1;
+	keyp2 = key2;
+	return strcmp(keyp1, keyp2);
+}
+
+static const struct hashtab_key_params hashtab_str_key_params = {
+	.hash = hashtab_str_hash,
+	.cmp = hashtab_str_cmp,
+};
+
+int hashtab_str_insert(struct hashtab *h, char *key, void *datum)
+{
+	return hashtab_insert(h, key, datum, hashtab_str_key_params);
+}
+
+void *hashtab_str_search(struct hashtab *h, const char *key)
+{
+	return hashtab_search(h, key, hashtab_str_key_params);
+}

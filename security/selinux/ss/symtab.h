@@ -17,10 +17,21 @@ struct symtab {
 	u32 nprim;		/* number of primary names in table */
 };
 
-int symtab_init(struct symtab *s, unsigned int size);
+static inline int symtab_init(struct symtab *s, unsigned int size)
+{
+	s->nprim = 0;
+	return hashtab_init(&s->table, size);
+}
 
-int symtab_insert(struct symtab *s, char *name, void *datum);
-void *symtab_search(struct symtab *s, const char *name);
+static inline int symtab_insert(struct symtab *s, char *name, void *datum)
+{
+	return hashtab_str_insert(&s->table, name, datum);
+}
+
+static inline void *symtab_search(struct symtab *s, const char *name)
+{
+	return hashtab_str_search(&s->table, name);
+}
 
 #endif	/* _SS_SYMTAB_H_ */
 
