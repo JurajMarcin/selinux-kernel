@@ -887,6 +887,11 @@ int avtab_write_item(struct policydb *p, const struct avtab_node *cur, void *fp)
 	    cur->key.specified & AVTAB_TRANSITION &&
 	    !cur->datum.u.trans->otype)
 		return 0;
+	if (p->policyvers < POLICYDB_VERSION_PREFIX_SUFFIX &&
+	    cur->key.specified & AVTAB_TRANSITION &&
+	    !cur->datum.u.trans->otype &&
+	    hashtab_is_empty(&cur->datum.u.trans->name_trans.table))
+		return 0;
 
 	buf16[0] = cpu_to_le16(cur->key.source_type);
 	buf16[1] = cpu_to_le16(cur->key.target_type);
@@ -927,16 +932,27 @@ int avtab_write(struct policydb *p, struct avtab *a, void *fp)
 	u32 nel;
 
 	nel = a->nel;
-	if (p->policyvers < POLICYDB_VERSION_AVTAB_FTRANS) {
-		/*
-		 * in older version, skip entries with only filename transition,
-		 * as these are written out separately
-		 */
-		for (i = 0; i < a->nslot; i++) {
-			for (cur = a->htable[i]; cur; cur = cur->next) {
-				if (cur->key.specified & AVTAB_TRANSITION &&
-				    !cur->datum.u.trans->otype)
-					nel--;
+	for (i = 0; i < a->nslot; i++) {
+		for (cur = a->htable[i]; cur; cur = cur->next) {
+			if (!(cur->key.specified & AVTAB_TRANSITION))
+				continue;
+			if (p->policyvers < POLICYDB_VERSION_AVTAB_FTRANS &&
+			    !cur->datum.u.trans->otype) {
+				/*
+				 * skip entries with only filename transition,
+				 * as these are written out separately in
+				 * previous versions
+				 */
+				nel--;
+			} else if (p->policyvers < POLICYDB_VERSION_PREFIX_SUFFIX &&
+				   !cur->datum.u.trans->otype &&
+				   hashtab_is_empty(&cur->datum.u.trans->name_trans.table)) {
+				/*
+				 * skip entries with prefix/suffix transitions
+				 * only as they are not supported in previous
+				 * versions
+				 */
+				nel--;
 			}
 		}
 	}
