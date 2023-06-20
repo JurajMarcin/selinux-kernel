@@ -762,7 +762,7 @@ static int avtab_insert_filename_trans(struct avtab *a,
 	datum = avtab_search(a, key);
 	if (!datum) {
 		/*
-		 * insert is acctually unique, but with this function we can get
+		 * insert is actually unique, but with this function we can get
 		 * the inserted node and therefore the datum
 		 */
 		node = avtab_insert_nonunique(a, key, &new_datum);
