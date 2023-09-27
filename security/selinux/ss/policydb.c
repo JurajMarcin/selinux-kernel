@@ -155,6 +155,11 @@ static const struct policydb_compat_info policydb_compat[] = {
 		.sym_num = SYM_NUM,
 		.ocon_num = OCON_NUM,
 	},
+	{
+		.version	= POLICYDB_VERSION_PREFIX_SUFFIX,
+		.sym_num	= SYM_NUM,
+		.ocon_num	= OCON_NUM,
+	},
 };
 
 static const struct policydb_compat_info *
@@ -2689,6 +2694,14 @@ int policydb_read(struct policydb *p, void *fp)
 	rc = filename_trans_read(p, fp, FILENAME_TRANS_MATCH_EXACT);
 	if (rc)
 		goto bad;
+	if (p->policyvers >= POLICYDB_VERSION_PREFIX_SUFFIX) {
+		rc = filename_trans_read(p, fp, FILENAME_TRANS_MATCH_PREFIX);
+		if (rc)
+			goto bad;
+		rc = filename_trans_read(p, fp, FILENAME_TRANS_MATCH_SUFFIX);
+		if (rc)
+			goto bad;
+	}
 
 	rc = policydb_index(p);
 	if (rc)
@@ -3769,6 +3782,18 @@ int policydb_write(struct policydb *p, void *fp)
 	rc = filename_trans_write(p, fp, FILENAME_TRANS_MATCH_EXACT);
 	if (rc)
 		return rc;
+	if (p->policyvers >= POLICYDB_VERSION_PREFIX_SUFFIX) {
+		rc = filename_trans_write(p, fp, FILENAME_TRANS_MATCH_PREFIX);
+		if (rc)
+			return rc;
+		rc = filename_trans_write(p, fp, FILENAME_TRANS_MATCH_SUFFIX);
+		if (rc)
+			return rc;
+	} else if (p->filename_trans[FILENAME_TRANS_MATCH_PREFIX].nel ||
+		   p->filename_trans[FILENAME_TRANS_MATCH_SUFFIX].nel) {
+		pr_warn("SELinux: Policy version does not support "
+			"prefix/suffix filename transitions");
+	}
 
 	rc = ocontext_write(p, info, fp);
 	if (rc)
