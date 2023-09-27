@@ -1672,13 +1672,20 @@ out:
 	return -EACCES;
 }
 
-static void filename_compute_type(struct policydb *policydb,
+static int filename_compute_type(struct policydb *policydb,
 				  struct context *newcontext,
 				  u32 stype, u32 ttype, u16 tclass,
 				  const char *objname)
 {
 	struct filename_trans_key ft;
 	struct filename_trans_datum *datum;
+	size_t prefix_len;
+	size_t suffix_len;
+	size_t prefix_max;
+	size_t suffix_max;
+	size_t prefix_min;
+	size_t suffix_min;
+	size_t objname_len = strlen(objname);
 
 	/*
 	 * Most filename trans rules are going to live in specific directories
@@ -1686,20 +1693,55 @@ static void filename_compute_type(struct policydb *policydb,
 	 * if the ttype does not contain any rules.
 	 */
 	if (!ebitmap_get_bit(&policydb->filename_trans_ttypes, ttype))
-		return;
+		return 0;
 
 	ft.ttype = ttype;
 	ft.tclass = tclass;
 	ft.name = objname;
+	ft.name_len = objname_len;
 
-	datum = policydb_filenametr_search(policydb, &ft);
-	while (datum) {
-		if (ebitmap_get_bit(&datum->stypes, stype - 1)) {
-			newcontext->type = datum->otype;
-			return;
-		}
-		datum = datum->next;
+	/* Search for exact rules */
+	datum = policydb_filenametr_search(policydb, FILENAME_TRANS_MATCH_EXACT,
+					   &ft, stype);
+	if (datum)
+		goto found;
+
+	/* Search for prefix rules */
+	prefix_max = min(
+		objname_len,
+		policydb->filename_trans_name_max[FILENAME_TRANS_MATCH_PREFIX]);
+	prefix_min =
+		policydb->filename_trans_name_min[FILENAME_TRANS_MATCH_PREFIX];
+	/* filename rule with name length 0 is invalid */
+	for (prefix_len = prefix_max; prefix_len >= prefix_min; prefix_len--) {
+		ft.name_len = prefix_len;
+		datum = policydb_filenametr_search(policydb,
+						   FILENAME_TRANS_MATCH_PREFIX,
+						   &ft, stype);
+		if (datum)
+			goto found;
 	}
+
+	/* Search for suffix rules */
+	suffix_max = min(
+		objname_len,
+		policydb->filename_trans_name_max[FILENAME_TRANS_MATCH_SUFFIX]);
+	suffix_min =
+		policydb->filename_trans_name_min[FILENAME_TRANS_MATCH_SUFFIX];
+	for (suffix_len = suffix_max; suffix_len >= suffix_min; suffix_len--) {
+		ft.name = &objname[objname_len - suffix_len];
+		ft.name_len = suffix_len;
+		datum = policydb_filenametr_search(policydb,
+						   FILENAME_TRANS_MATCH_SUFFIX,
+						   &ft, stype);
+		if (datum)
+			goto found;
+	}
+	return 0;
+
+found:
+	newcontext->type = datum->otype;
+	return 0;
 }
 
 static int security_compute_sid(u32 ssid,
@@ -1844,9 +1886,13 @@ retry:
 	}
 
 	/* if we have a objname this is a file trans check so check those rules */
-	if (objname)
-		filename_compute_type(policydb, &newcontext, scontext->type,
-				      tcontext->type, tclass, objname);
+	if (objname) {
+		rc = filename_compute_type(policydb, &newcontext,
+					   scontext->type, tcontext->type,
+					   tclass, objname);
+		if (rc)
+			goto out_unlock;
+	}
 
 	/* Check for class-specific changes. */
 	if (specified & AVTAB_TRANSITION) {

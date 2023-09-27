@@ -93,6 +93,7 @@ struct filename_trans_key {
 	u32 ttype; /* parent dir context */
 	u16 tclass; /* class of new object */
 	const char *name; /* last path component */
+	u32 name_len; /* length of the last path component */
 };
 
 struct filename_trans_datum {
@@ -232,6 +233,11 @@ struct genfs {
 #define OCON_IBENDPORT 8 /* Infiniband end ports */
 #define OCON_NUM       9
 
+#define FILENAME_TRANS_MATCH_EXACT 0
+#define FILENAME_TRANS_MATCH_PREFIX 1
+#define FILENAME_TRANS_MATCH_SUFFIX 2
+#define FILENAME_TRANS_MATCH_NUM 3
+
 /* The policy database */
 struct policydb {
 	int mls_enabled;
@@ -266,9 +272,12 @@ struct policydb {
 	/* quickly exclude lookups when parent ttype has no rules */
 	struct ebitmap filename_trans_ttypes;
 	/* actual set of filename_trans rules */
-	struct hashtab filename_trans;
+	struct hashtab filename_trans[FILENAME_TRANS_MATCH_NUM];
 	/* only used if policyvers < POLICYDB_VERSION_COMP_FTRANS */
 	u32 compat_filename_trans_count;
+	/* lenghts of prefix/suffix rules to optimze for long filenames */
+	u32 filename_trans_name_max[FILENAME_TRANS_MATCH_NUM];
+	u32 filename_trans_name_min[FILENAME_TRANS_MATCH_NUM];
 
 	/* bools indexed by (value - 1) */
 	struct cond_bool_datum **bool_val_to_struct;
@@ -322,7 +331,8 @@ extern int policydb_read(struct policydb *p, void *fp);
 extern int policydb_write(struct policydb *p, void *fp);
 
 extern struct filename_trans_datum *
-policydb_filenametr_search(struct policydb *p, struct filename_trans_key *key);
+policydb_filenametr_search(struct policydb *p, unsigned int match_type,
+			   struct filename_trans_key *key, u32 stype);
 
 extern struct mls_range *policydb_rangetr_search(struct policydb *p,
 						 struct range_trans *key);
