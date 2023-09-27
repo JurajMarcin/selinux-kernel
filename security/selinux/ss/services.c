@@ -1672,13 +1672,15 @@ out:
 	return -EACCES;
 }
 
-static void filename_compute_type(struct policydb *policydb,
+static int filename_compute_type(struct policydb *policydb,
 				  struct context *newcontext,
 				  u32 stype, u32 ttype, u16 tclass,
 				  const char *objname)
 {
 	struct filename_trans_key ft;
 	struct filename_trans_datum *datum;
+	size_t name_len = strlen(objname);
+	char *name_copy;
 
 	/*
 	 * Most filename trans rules are going to live in specific directories
@@ -1686,21 +1688,28 @@ static void filename_compute_type(struct policydb *policydb,
 	 * if the ttype does not contain any rules.
 	 */
 	if (!ebitmap_get_bit(&policydb->filename_trans_ttypes, ttype))
-		return;
+		return 0;
 
 	ft.ttype = ttype;
 	ft.tclass = tclass;
 	ft.name = objname;
+
+	name_copy = kstrdup(objname, GFP_KERNEL);
+	if (!name_copy)
+		return -ENOMEM;
+	(void)name_len;
+	kfree(name_copy);
 
 	datum = policydb_filenametr_search(policydb, &ft,
 					   FILENAME_TRANS_MATCH_EXACT);
 	while (datum) {
 		if (ebitmap_get_bit(&datum->stypes, stype - 1)) {
 			newcontext->type = datum->otype;
-			return;
+			return 0;
 		}
 		datum = datum->next;
 	}
+	return 0;
 }
 
 static int security_compute_sid(u32 ssid,
@@ -1845,9 +1854,13 @@ retry:
 	}
 
 	/* if we have a objname this is a file trans check so check those rules */
-	if (objname)
-		filename_compute_type(policydb, &newcontext, scontext->type,
-				      tcontext->type, tclass, objname);
+	if (objname) {
+		rc = filename_compute_type(policydb, &newcontext,
+					   scontext->type, tcontext->type,
+					   tclass, objname);
+		if (rc)
+			goto out_unlock;
+	}
 
 	/* Check for class-specific changes. */
 	if (specified & AVTAB_TRANSITION) {
