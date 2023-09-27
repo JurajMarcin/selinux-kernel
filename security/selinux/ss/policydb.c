@@ -438,9 +438,11 @@ static const struct hashtab_key_params filenametr_key_params = {
 };
 
 struct filename_trans_datum *
-policydb_filenametr_search(struct policydb *p, struct filename_trans_key *key)
+policydb_filenametr_search(struct policydb *p, struct filename_trans_key *key,
+			   unsigned int match_type)
 {
-	return hashtab_search(&p->filename_trans, key, filenametr_key_params);
+	return hashtab_search(&p->filename_trans[match_type], key,
+			      filenametr_key_params);
 }
 
 static u32 rangetr_hash(const void *k)
@@ -831,8 +833,11 @@ void policydb_destroy(struct policydb *p)
 	}
 	kfree(lra);
 
-	hashtab_map(&p->filename_trans, filenametr_destroy, NULL);
-	hashtab_destroy(&p->filename_trans);
+	for (unsigned int i = 0;
+	     i < sizeof(p->filename_trans) / sizeof(struct hashtab); i++) {
+		hashtab_map(&p->filename_trans[i], filenametr_destroy, NULL);
+		hashtab_destroy(&p->filename_trans[i]);
+	}
 
 	hashtab_map(&p->range_tr, range_tr_destroy, NULL);
 	hashtab_destroy(&p->range_tr);
@@ -1938,7 +1943,8 @@ static int filename_trans_read_helper_compat(struct policydb *p, void *fp)
 	otype = le32_to_cpu(buf[3]);
 
 	last = NULL;
-	datum = policydb_filenametr_search(p, &key);
+	// this version does not support other tham exact match
+	datum = policydb_filenametr_search(p, &key, FILENAME_TRANS_MATCH_EXACT);
 	while (datum) {
 		if (unlikely(ebitmap_get_bit(&datum->stypes, stype - 1))) {
 			/* conflicting/duplicate rules are ignored */
@@ -1968,8 +1974,9 @@ static int filename_trans_read_helper_compat(struct policydb *p, void *fp)
 			if (!ft)
 				goto out;
 
-			rc = hashtab_insert(&p->filename_trans, ft, datum,
-					    filenametr_key_params);
+			rc = hashtab_insert(
+				&p->filename_trans[FILENAME_TRANS_MATCH_EXACT],
+				ft, datum, filenametr_key_params);
 			if (rc)
 				goto out;
 			name = NULL;
@@ -1990,7 +1997,8 @@ out:
 	return rc;
 }
 
-static int filename_trans_read_helper(struct policydb *p, void *fp)
+static int filename_trans_read_helper(struct policydb *p, void *fp,
+				      unsigned int match_type)
 {
 	struct filename_trans_key *ft = NULL;
 	struct filename_trans_datum **dst, *datum, *first = NULL;
@@ -2057,7 +2065,7 @@ static int filename_trans_read_helper(struct policydb *p, void *fp)
 	ft->tclass = tclass;
 	ft->name = name;
 
-	rc = hashtab_insert(&p->filename_trans, ft, first,
+	rc = hashtab_insert(&p->filename_trans[match_type], ft, first,
 			    filenametr_key_params);
 	if (rc == -EEXIST)
 		pr_err("SELinux:  Duplicate filename transition key\n");
@@ -2079,7 +2087,8 @@ out:
 	return rc;
 }
 
-static int filename_trans_read(struct policydb *p, void *fp)
+static int filename_trans_read(struct policydb *p, void *fp,
+			       unsigned int match_type)
 {
 	u32 nel, i;
 	__le32 buf[1];
@@ -2096,27 +2105,28 @@ static int filename_trans_read(struct policydb *p, void *fp)
 	if (p->policyvers < POLICYDB_VERSION_COMP_FTRANS) {
 		p->compat_filename_trans_count = nel;
 
-		rc = hashtab_init(&p->filename_trans, (1 << 11));
+		rc = hashtab_init(&p->filename_trans[match_type], (1 << 11));
 		if (rc)
 			return rc;
 
 		for (i = 0; i < nel; i++) {
+			// this version does not support other than exact match
 			rc = filename_trans_read_helper_compat(p, fp);
 			if (rc)
 				return rc;
 		}
 	} else {
-		rc = hashtab_init(&p->filename_trans, nel);
+		rc = hashtab_init(&p->filename_trans[match_type], nel);
 		if (rc)
 			return rc;
 
 		for (i = 0; i < nel; i++) {
-			rc = filename_trans_read_helper(p, fp);
+			rc = filename_trans_read_helper(p, fp, match_type);
 			if (rc)
 				return rc;
 		}
 	}
-	hash_eval(&p->filename_trans, "filenametr");
+	hash_eval(&p->filename_trans[match_type], "filenametr");
 	return 0;
 }
 
@@ -2676,7 +2686,7 @@ int policydb_read(struct policydb *p, void *fp)
 		lra = ra;
 	}
 
-	rc = filename_trans_read(p, fp);
+	rc = filename_trans_read(p, fp, FILENAME_TRANS_MATCH_EXACT);
 	if (rc)
 		goto bad;
 
@@ -3616,7 +3626,8 @@ static int filename_write_helper(void *key, void *data, void *ptr)
 	return 0;
 }
 
-static int filename_trans_write(struct policydb *p, void *fp)
+static int filename_trans_write(struct policydb *p, void *fp,
+				unsigned int match_type)
 {
 	__le32 buf[1];
 	int rc;
@@ -3630,15 +3641,16 @@ static int filename_trans_write(struct policydb *p, void *fp)
 		if (rc)
 			return rc;
 
-		rc = hashtab_map(&p->filename_trans,
+		rc = hashtab_map(&p->filename_trans[match_type],
 				 filename_write_helper_compat, fp);
 	} else {
-		buf[0] = cpu_to_le32(p->filename_trans.nel);
+		buf[0] = cpu_to_le32(p->filename_trans[match_type].nel);
 		rc = put_entry(buf, sizeof(u32), 1, fp);
 		if (rc)
 			return rc;
 
-		rc = hashtab_map(&p->filename_trans, filename_write_helper, fp);
+		rc = hashtab_map(&p->filename_trans[match_type],
+				 filename_write_helper, fp);
 	}
 	return rc;
 }
@@ -3754,7 +3766,7 @@ int policydb_write(struct policydb *p, void *fp)
 	if (rc)
 		return rc;
 
-	rc = filename_trans_write(p, fp);
+	rc = filename_trans_write(p, fp, FILENAME_TRANS_MATCH_EXACT);
 	if (rc)
 		return rc;
 

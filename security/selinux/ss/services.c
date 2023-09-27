@@ -1692,7 +1692,8 @@ static void filename_compute_type(struct policydb *policydb,
 	ft.tclass = tclass;
 	ft.name = objname;
 
-	datum = policydb_filenametr_search(policydb, &ft);
+	datum = policydb_filenametr_search(policydb, &ft,
+					   FILENAME_TRANS_MATCH_EXACT);
 	while (datum) {
 		if (ebitmap_get_bit(&datum->stypes, stype - 1)) {
 			newcontext->type = datum->otype;

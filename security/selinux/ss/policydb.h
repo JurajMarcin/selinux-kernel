@@ -262,11 +262,14 @@ struct policydb {
 	/* role transitions */
 	struct hashtab role_tr;
 
+#define FILENAME_TRANS_MATCH_EXACT 0
+#define FILENAME_TRANS_MATCH_PREFIX 1
+#define FILENAME_TRANS_MATCH_SUFFIX 2
 	/* file transitions with the last path component */
 	/* quickly exclude lookups when parent ttype has no rules */
 	struct ebitmap filename_trans_ttypes;
 	/* actual set of filename_trans rules */
-	struct hashtab filename_trans;
+	struct hashtab filename_trans[FILENAME_TRANS_MATCH_SUFFIX + 1];
 	/* only used if policyvers < POLICYDB_VERSION_COMP_FTRANS */
 	u32 compat_filename_trans_count;
 
@@ -321,8 +324,9 @@ extern int policydb_role_isvalid(struct policydb *p, unsigned int role);
 extern int policydb_read(struct policydb *p, void *fp);
 extern int policydb_write(struct policydb *p, void *fp);
 
-extern struct filename_trans_datum *
-policydb_filenametr_search(struct policydb *p, struct filename_trans_key *key);
+struct filename_trans_datum *
+policydb_filenametr_search(struct policydb *p, struct filename_trans_key *key,
+			   unsigned int match_type)
 
 extern struct mls_range *policydb_rangetr_search(struct policydb *p,
 						 struct range_trans *key);
