@@ -1695,6 +1695,7 @@ static int filename_compute_type(struct policydb *policydb,
 	ft.tclass = tclass;
 	ft.name = objname;
 
+	/* Search for prefix rules */
 	name_copy = kstrdup(objname, GFP_KERNEL);
 	if (!name_copy)
 		return -ENOMEM;
@@ -1705,13 +1706,26 @@ static int filename_compute_type(struct policydb *policydb,
 						   FILENAME_TRANS_MATCH_PREFIX,
 						   &ft, stype);
 		if (datum) {
-			printk("WARN: Found prefix type for %s/%s (s=%u, t=%u, o=%u)", objname, name_copy, stype, ttype, datum->otype);
 			newcontext->type = datum->otype;
 			return 0;
 		}
 	}
 	kfree(name_copy);
 
+	/* Search for suffix rules */
+	for (i = 0; i < name_len; i++) {
+		ft.name = &objname[i];
+		datum = policydb_filenametr_search(policydb,
+						   FILENAME_TRANS_MATCH_SUFFIX,
+						   &ft, stype);
+		if (datum) {
+			newcontext->type = datum->otype;
+			return 0;
+		}
+	}
+
+	/* Search for exact rules */
+	ft.name = objname;
 	datum = policydb_filenametr_search(policydb, FILENAME_TRANS_MATCH_EXACT,
 					   &ft, stype);
 	if (datum)
