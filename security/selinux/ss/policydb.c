@@ -443,11 +443,21 @@ static const struct hashtab_key_params filenametr_key_params = {
 };
 
 struct filename_trans_datum *
-policydb_filenametr_search(struct policydb *p, struct filename_trans_key *key,
-			   unsigned int match_type)
+policydb_filenametr_search(struct policydb *p, unsigned int match_type,
+			   struct filename_trans_key *key, u32 stype)
 {
-	return hashtab_search(&p->filename_trans[match_type], key,
-			      filenametr_key_params);
+	struct filename_trans_datum *datum = hashtab_search(
+		&p->filename_trans[match_type], key, filenametr_key_params);
+
+	if (stype) {
+		while (datum) {
+			if (ebitmap_get_bit(&datum->stypes, stype - 1)) {
+				return datum;
+			}
+			datum = datum->next;
+		}
+	}
+	return datum;
 }
 
 static u32 rangetr_hash(const void *k)
@@ -1949,7 +1959,8 @@ static int filename_trans_read_helper_compat(struct policydb *p, void *fp)
 
 	last = NULL;
 	// this version does not support other tham exact match
-	datum = policydb_filenametr_search(p, &key, FILENAME_TRANS_MATCH_EXACT);
+	datum = policydb_filenametr_search(p, FILENAME_TRANS_MATCH_EXACT, &key,
+					   0);
 	while (datum) {
 		if (unlikely(ebitmap_get_bit(&datum->stypes, stype - 1))) {
 			/* conflicting/duplicate rules are ignored */

@@ -1680,6 +1680,7 @@ static int filename_compute_type(struct policydb *policydb,
 	struct filename_trans_key ft;
 	struct filename_trans_datum *datum;
 	size_t name_len = strlen(objname);
+	size_t i;
 	char *name_copy;
 
 	/*
@@ -1697,18 +1698,23 @@ static int filename_compute_type(struct policydb *policydb,
 	name_copy = kstrdup(objname, GFP_KERNEL);
 	if (!name_copy)
 		return -ENOMEM;
-	(void)name_len;
-	kfree(name_copy);
-
-	datum = policydb_filenametr_search(policydb, &ft,
-					   FILENAME_TRANS_MATCH_EXACT);
-	while (datum) {
-		if (ebitmap_get_bit(&datum->stypes, stype - 1)) {
+	ft.name = name_copy;
+	for (i = name_len; i > 0; i--) {
+		name_copy[i] = '\0';
+		datum = policydb_filenametr_search(policydb,
+						   FILENAME_TRANS_MATCH_PREFIX,
+						   &ft, stype);
+		if (datum) {
 			newcontext->type = datum->otype;
 			return 0;
 		}
-		datum = datum->next;
 	}
+	kfree(name_copy);
+
+	datum = policydb_filenametr_search(policydb, FILENAME_TRANS_MATCH_EXACT,
+					   &ft, stype);
+	if (datum)
+		newcontext->type = datum->otype;
 	return 0;
 }
 
