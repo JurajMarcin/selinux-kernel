@@ -325,8 +325,8 @@ extern int policydb_read(struct policydb *p, void *fp);
 extern int policydb_write(struct policydb *p, void *fp);
 
 struct filename_trans_datum *
-policydb_filenametr_search(struct policydb *p, struct filename_trans_key *key,
-			   unsigned int match_type)
+policydb_filenametr_search(struct policydb *p, unsigned int match_type,
+			   struct filename_trans_key *key, u32 stype);
 
 extern struct mls_range *policydb_rangetr_search(struct policydb *p,
 						 struct range_trans *key);
