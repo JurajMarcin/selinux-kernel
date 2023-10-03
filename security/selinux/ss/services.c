@@ -1705,6 +1705,7 @@ static int filename_compute_type(struct policydb *policydb,
 						   FILENAME_TRANS_MATCH_PREFIX,
 						   &ft, stype);
 		if (datum) {
+			printk("WARN: Found prefix type for %s/%s (s=%u, t=%u, o=%u)", objname, name_copy, stype, ttype, datum->otype);
 			newcontext->type = datum->otype;
 			return 0;
 		}
