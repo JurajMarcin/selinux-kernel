@@ -1958,7 +1958,7 @@ static int filename_trans_read_helper_compat(struct policydb *p, void *fp)
 	otype = le32_to_cpu(buf[3]);
 
 	last = NULL;
-	// this version does not support other tham exact match
+	// this version does not support other than exact match
 	datum = policydb_filenametr_search(p, FILENAME_TRANS_MATCH_EXACT, &key,
 					   0);
 	while (datum) {
