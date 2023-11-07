@@ -1692,7 +1692,6 @@ static int filename_compute_type(struct policydb *policydb,
 
 	ft.ttype = ttype;
 	ft.tclass = tclass;
-	ft.name = objname;
 
 	/* Search for exact rules */
 	ft.name = objname;
