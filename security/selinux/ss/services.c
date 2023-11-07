@@ -1706,6 +1706,7 @@ static int filename_compute_type(struct policydb *policydb,
 						   &ft, stype);
 		if (datum) {
 			newcontext->type = datum->otype;
+			kfree(name_copy);
 			return 0;
 		}
 	}
