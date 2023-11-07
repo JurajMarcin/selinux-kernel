@@ -1695,6 +1695,15 @@ static int filename_compute_type(struct policydb *policydb,
 	ft.tclass = tclass;
 	ft.name = objname;
 
+	/* Search for exact rules */
+	ft.name = objname;
+	datum = policydb_filenametr_search(policydb, FILENAME_TRANS_MATCH_EXACT,
+					   &ft, stype);
+	if (datum) {
+		newcontext->type = datum->otype;
+		return 0;
+	}
+
 	/* Search for prefix rules */
 	name_copy = kstrdup(objname, GFP_KERNEL);
 	if (!name_copy)
@@ -1724,13 +1733,6 @@ static int filename_compute_type(struct policydb *policydb,
 			return 0;
 		}
 	}
-
-	/* Search for exact rules */
-	ft.name = objname;
-	datum = policydb_filenametr_search(policydb, FILENAME_TRANS_MATCH_EXACT,
-					   &ft, stype);
-	if (datum)
-		newcontext->type = datum->otype;
 	return 0;
 }
 
