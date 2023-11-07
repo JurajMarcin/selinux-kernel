@@ -442,6 +442,18 @@ static const struct hashtab_key_params filenametr_key_params = {
 	.cmp = filenametr_cmp,
 };
 
+/**
+ * policydb_filenametr_search() - Search for filename transition in policy
+ * @p: policydb structure to search in
+ * @match_type: filename transition match type to search for
+ * @key: key to search for
+ * @stype: source type to search for, when stype is zero, the function will
+ *         return head of the linked list with matching key, otherwise it will
+ *         traverse the linked list to find the item with matching stype
+ *
+ * Return: head of the linked list of filename transition datums or single item
+ * 	   of the list, based on the stype value
+ */
 struct filename_trans_datum *
 policydb_filenametr_search(struct policydb *p, unsigned int match_type,
 			   struct filename_trans_key *key, u32 stype)
@@ -848,8 +860,7 @@ void policydb_destroy(struct policydb *p)
 	}
 	kfree(lra);
 
-	for (unsigned int i = 0;
-	     i < sizeof(p->filename_trans) / sizeof(struct hashtab); i++) {
+	for (unsigned int i = 0; i < FILENAME_TRANS_MATCH_NUM; i++) {
 		hashtab_map(&p->filename_trans[i], filenametr_destroy, NULL);
 		hashtab_destroy(&p->filename_trans[i]);
 	}
@@ -3800,10 +3811,6 @@ int policydb_write(struct policydb *p, void *fp)
 		rc = filename_trans_write(p, fp, FILENAME_TRANS_MATCH_SUFFIX);
 		if (rc)
 			return rc;
-	} else if (p->filename_trans[FILENAME_TRANS_MATCH_PREFIX].nel ||
-		   p->filename_trans[FILENAME_TRANS_MATCH_SUFFIX].nel) {
-		pr_warn("SELinux: Policy version does not support "
-			"prefix/suffix filename transitions");
 	}
 
 	rc = ocontext_write(p, info, fp);
