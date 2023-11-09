@@ -1703,7 +1703,7 @@ static int filename_compute_type(struct policydb *policydb,
 	}
 
 	/* Search for prefix rules */
-	name_copy = kstrdup(objname, GFP_KERNEL);
+	name_copy = kstrdup(objname, GFP_ATOMIC);
 	if (!name_copy)
 		return -ENOMEM;
 	ft.name = name_copy;
