@@ -232,12 +232,10 @@ struct genfs {
 #define OCON_IBENDPORT 8 /* Infiniband end ports */
 #define OCON_NUM       9
 
-enum {
-	FILENAME_TRANS_MATCH_EXACT,
-	FILENAME_TRANS_MATCH_PREFIX,
-	FILENAME_TRANS_MATCH_SUFFIX,
-	FILENAME_TRANS_MATCH_NUM,
-};
+#define FILENAME_TRANS_MATCH_EXACT 0
+#define FILENAME_TRANS_MATCH_PREFIX 1
+#define FILENAME_TRANS_MATCH_SUFFIX 2
+#define FILENAME_TRANS_MATCH_NUM 3
 
 /* The policy database */
 struct policydb {
