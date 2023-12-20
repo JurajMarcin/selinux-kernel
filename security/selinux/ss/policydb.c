@@ -549,6 +549,7 @@ struct role_trans_datum *policydb_roletr_search(struct policydb *p,
  */
 static void policydb_init(struct policydb *p)
 {
+	size_t i;
 	memset(p, 0, sizeof(*p));
 
 	avtab_init(&p->te_avtab);
@@ -557,6 +558,10 @@ static void policydb_init(struct policydb *p)
 	ebitmap_init(&p->filename_trans_ttypes);
 	ebitmap_init(&p->policycaps);
 	ebitmap_init(&p->permissive_map);
+
+	for (i = 0; i < FILENAME_TRANS_MATCH_NUM; i++) {
+		p->filename_trans_name_len_min[i] = U32_MAX;
+	}
 }
 
 /*
@@ -1969,7 +1974,10 @@ static int filename_trans_read_helper_compat(struct policydb *p, void *fp)
 	otype = le32_to_cpu(buf[3]);
 
 	last = NULL;
-	/* this version does not support other than exact match */
+	/*
+	 * this version does not support other than exact match,
+	 * therefore there is also no need to save name max/min
+	 */
 	datum = policydb_filenametr_search(p, FILENAME_TRANS_MATCH_EXACT, &key,
 					   0);
 	while (datum) {
@@ -2044,6 +2052,12 @@ static int filename_trans_read_helper(struct policydb *p, void *fp,
 	rc = str_read(&name, GFP_KERNEL, fp, len);
 	if (rc)
 		return rc;
+
+	/* save name len to limit prefix/suffix lookups later */
+	if (len > p->filename_trans_name_len_max[match_type])
+		p->filename_trans_name_len_max[match_type] = len;
+	if (len < p->filename_trans_name_len_min[match_type])
+		p->filename_trans_name_len_min[match_type] = len;
 
 	rc = next_entry(buf, fp, sizeof(u32) * 3);
 	if (rc)
