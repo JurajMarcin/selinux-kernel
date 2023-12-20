@@ -452,7 +452,7 @@ static const struct hashtab_key_params filenametr_key_params = {
  *         traverse the linked list to find the item with matching stype
  *
  * Return: head of the linked list of filename transition datums or single item
- * 	   of the list, based on the stype value
+ *         of the list, based on the stype value
  */
 struct filename_trans_datum *
 policydb_filenametr_search(struct policydb *p, unsigned int match_type,
@@ -460,14 +460,14 @@ policydb_filenametr_search(struct policydb *p, unsigned int match_type,
 {
 	struct filename_trans_datum *datum = hashtab_search(
 		&p->filename_trans[match_type], key, filenametr_key_params);
+	if (!datum || !stype)
+		return datum;
 
-	if (stype) {
-		while (datum) {
-			if (ebitmap_get_bit(&datum->stypes, stype - 1)) {
-				return datum;
-			}
-			datum = datum->next;
-		}
+	while (datum) {
+		if (ebitmap_get_bit(&datum->stypes, stype - 1))
+			return datum;
+
+		datum = datum->next;
 	}
 	return datum;
 }
@@ -1969,7 +1969,7 @@ static int filename_trans_read_helper_compat(struct policydb *p, void *fp)
 	otype = le32_to_cpu(buf[3]);
 
 	last = NULL;
-	// this version does not support other than exact match
+	/* this version does not support other than exact match */
 	datum = policydb_filenametr_search(p, FILENAME_TRANS_MATCH_EXACT, &key,
 					   0);
 	while (datum) {
@@ -2137,7 +2137,9 @@ static int filename_trans_read(struct policydb *p, void *fp,
 			return rc;
 
 		for (i = 0; i < nel; i++) {
-			// this version does not support other than exact match
+			/*
+			 * this version does not support other than exact match
+			 */
 			rc = filename_trans_read_helper_compat(p, fp);
 			if (rc)
 				return rc;
