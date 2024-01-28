@@ -1679,6 +1679,7 @@ static void filename_compute_type(struct policydb *policydb,
 {
 	struct filename_trans_key ft;
 	struct filename_trans_datum *datum;
+	char *name_copy = NULL;
 
 	/*
 	 * Most filename trans rules are going to live in specific directories
@@ -1690,16 +1691,19 @@ static void filename_compute_type(struct policydb *policydb,
 
 	ft.ttype = ttype;
 	ft.tclass = tclass;
-	ft.name = objname;
+	name_copy = kstrdup(objname, GFP_ATOMIC);
+	ft.name = name_copy;
 
 	datum = policydb_filenametr_search(policydb, &ft);
 	while (datum) {
 		if (ebitmap_get_bit(&datum->stypes, stype - 1)) {
 			newcontext->type = datum->otype;
-			return;
+			goto found;
 		}
 		datum = datum->next;
 	}
+found:
+	kfree(name_copy);
 }
 
 static int security_compute_sid(u32 ssid,
