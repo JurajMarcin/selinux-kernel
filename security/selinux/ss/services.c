@@ -1679,9 +1679,8 @@ static int filename_compute_type(struct policydb *policydb,
 {
 	struct filename_trans_key ft;
 	struct filename_trans_datum *datum;
-	size_t name_len;
 	size_t i;
-	char *name_copy = NULL;
+	size_t name_len = strlen(objname);
 
 	/*
 	 * Most filename trans rules are going to live in specific directories
@@ -1693,9 +1692,10 @@ static int filename_compute_type(struct policydb *policydb,
 
 	ft.ttype = ttype;
 	ft.tclass = tclass;
+	ft.name = objname;
+	ft.name_len = name_len;
 
 	/* Search for exact rules */
-	ft.name = objname;
 	datum = policydb_filenametr_search(policydb, FILENAME_TRANS_MATCH_EXACT,
 					   &ft, stype);
 	if (datum)
@@ -1703,13 +1703,8 @@ static int filename_compute_type(struct policydb *policydb,
 
 	// TODO: limit iteration bounds
 	/* Search for prefix rules */
-	name_copy = kstrdup(objname, GFP_ATOMIC);
-	if (!name_copy)
-		return -ENOMEM;
-	name_len = strlen(objname);
-	ft.name = name_copy;
 	for (i = name_len; i > 0; i--) {
-		name_copy[i] = '\0';
+		ft.name_len = i;
 		datum = policydb_filenametr_search(policydb,
 						   FILENAME_TRANS_MATCH_PREFIX,
 						   &ft, stype);
@@ -1721,18 +1716,17 @@ static int filename_compute_type(struct policydb *policydb,
 	/* Search for suffix rules */
 	for (i = 0; i < name_len; i++) {
 		ft.name = &objname[i];
+		ft.name_len = name_len - i;
 		datum = policydb_filenametr_search(policydb,
 						   FILENAME_TRANS_MATCH_SUFFIX,
 						   &ft, stype);
 		if (datum)
 			goto found;
 	}
-	kfree(name_copy);
 	return 0;
 
 found:
 	newcontext->type = datum->otype;
-	kfree(name_copy);
 	return 0;
 }
 
