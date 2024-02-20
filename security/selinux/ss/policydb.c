@@ -417,7 +417,7 @@ static u32 filenametr_hash(const void *k)
 	const struct filename_trans_key *ft = k;
 	unsigned long salt = ft->ttype ^ ft->tclass;
 
-	return full_name_hash((void *)salt, ft->name, strlen(ft->name));
+	return full_name_hash((void *)salt, ft->name, ft->name_len);
 }
 
 static int filenametr_cmp(const void *k1, const void *k2)
@@ -434,7 +434,8 @@ static int filenametr_cmp(const void *k1, const void *k2)
 	if (v)
 		return v;
 
-	return strcmp(ft1->name, ft2->name);
+	return ft1->name_len == ft2->name_len &&
+		strncmp(ft1->name, ft2->name, ft1->name_len);
 }
 
 static const struct hashtab_key_params filenametr_key_params = {
@@ -1970,6 +1971,7 @@ static int filename_trans_read_helper_compat(struct policydb *p, void *fp)
 	key.ttype = le32_to_cpu(buf[1]);
 	key.tclass = le32_to_cpu(buf[2]);
 	key.name = name;
+	key.name_len = len;
 
 	otype = le32_to_cpu(buf[3]);
 
@@ -2105,6 +2107,7 @@ static int filename_trans_read_helper(struct policydb *p, void *fp,
 	ft->ttype = ttype;
 	ft->tclass = tclass;
 	ft->name = name;
+	ft->name_len = len;
 
 	rc = hashtab_insert(&p->filename_trans[match_type], ft, first,
 			    filenametr_key_params);
@@ -3598,17 +3601,17 @@ static int filename_write_helper_compat(void *key, void *data, void *ptr)
 	void *fp = ptr;
 	__le32 buf[4];
 	int rc;
-	u32 bit, len = strlen(ft->name);
+	u32 bit;
 
 	do {
 		ebitmap_for_each_positive_bit(&datum->stypes, node, bit)
 		{
-			buf[0] = cpu_to_le32(len);
+			buf[0] = cpu_to_le32(ft->name_len);
 			rc = put_entry(buf, sizeof(u32), 1, fp);
 			if (rc)
 				return rc;
 
-			rc = put_entry(ft->name, sizeof(char), len, fp);
+			rc = put_entry(ft->name, sizeof(char), ft->name_len, fp);
 			if (rc)
 				return rc;
 
@@ -3635,14 +3638,14 @@ static int filename_write_helper(void *key, void *data, void *ptr)
 	void *fp = ptr;
 	__le32 buf[3];
 	int rc;
-	u32 ndatum, len = strlen(ft->name);
+	u32 ndatum;
 
-	buf[0] = cpu_to_le32(len);
+	buf[0] = cpu_to_le32(ft->name_len);
 	rc = put_entry(buf, sizeof(u32), 1, fp);
 	if (rc)
 		return rc;
 
-	rc = put_entry(ft->name, sizeof(char), len, fp);
+	rc = put_entry(ft->name, sizeof(char), ft->name_len, fp);
 	if (rc)
 		return rc;
 
