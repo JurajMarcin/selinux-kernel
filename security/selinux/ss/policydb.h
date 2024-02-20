@@ -93,6 +93,7 @@ struct filename_trans_key {
 	u32 ttype; /* parent dir context */
 	u16 tclass; /* class of new object */
 	const char *name; /* last path component */
+	u32 name_len; /* length of the last path component */
 };
 
 struct filename_trans_datum {
