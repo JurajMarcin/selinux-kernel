@@ -1679,12 +1679,13 @@ static int filename_compute_type(struct policydb *policydb,
 {
 	struct filename_trans_key ft;
 	struct filename_trans_datum *datum;
-	size_t i;
+	size_t prefix_len;
+	size_t suffix_len;
 	size_t prefix_max;
 	size_t suffix_max;
 	size_t prefix_min;
 	size_t suffix_min;
-	size_t name_len = strlen(objname);
+	size_t objname_len = strlen(objname);
 
 	/*
 	 * Most filename trans rules are going to live in specific directories
@@ -1697,7 +1698,7 @@ static int filename_compute_type(struct policydb *policydb,
 	ft.ttype = ttype;
 	ft.tclass = tclass;
 	ft.name = objname;
-	ft.name_len = name_len;
+	ft.name_len = objname_len;
 
 	/* Search for exact rules */
 	datum = policydb_filenametr_search(policydb, FILENAME_TRANS_MATCH_EXACT,
@@ -1706,11 +1707,11 @@ static int filename_compute_type(struct policydb *policydb,
 		goto found;
 
 	/* Search for prefix rules */
-	prefix_max = min(name_len, policydb->filename_trans_name_len_max[FILENAME_TRANS_MATCH_PREFIX]);
+	prefix_max = min(objname_len, policydb->filename_trans_name_len_max[FILENAME_TRANS_MATCH_PREFIX]);
 	prefix_min = policydb->filename_trans_name_len_min[FILENAME_TRANS_MATCH_PREFIX];
 	/* filename rule with name length 0 is invalid */
-	for (i = prefix_max; i >= prefix_min; i--) {
-		ft.name_len = i;
+	for (prefix_len = prefix_max; prefix_len >= prefix_min; prefix_len--) {
+		ft.name_len = prefix_len;
 		datum = policydb_filenametr_search(policydb,
 						   FILENAME_TRANS_MATCH_PREFIX,
 						   &ft, stype);
@@ -1719,14 +1720,11 @@ static int filename_compute_type(struct policydb *policydb,
 	}
 
 	/* Search for suffix rules */
-	if (name_len > policydb->filename_trans_name_len_max[FILENAME_TRANS_MATCH_SUFFIX])
-		suffix_min = name_len - policydb->filename_trans_name_len_max[FILENAME_TRANS_MATCH_SUFFIX];
-	else
-		suffix_min = 0;
-	suffix_max = name_len - policydb->filename_trans_name_len_min[FILENAME_TRANS_MATCH_SUFFIX];
-	for (i = suffix_min; i <= suffix_max; i++) {
-		ft.name = &objname[i];
-		ft.name_len = name_len - i;
+	suffix_max = min(objname_len, policydb->filename_trans_name_len_max[FILENAME_TRANS_MATCH_SUFFIX]);
+	suffix_min = policydb->filename_trans_name_len_min[FILENAME_TRANS_MATCH_SUFFIX];
+	for (suffix_len = suffix_max; suffix_len >= suffix_min; suffix_len--) {
+		ft.name = &objname[objname_len - suffix_len];
+		ft.name_len = suffix_len;
 		datum = policydb_filenametr_search(policydb,
 						   FILENAME_TRANS_MATCH_SUFFIX,
 						   &ft, stype);
