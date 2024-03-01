@@ -1684,7 +1684,6 @@ static int filename_compute_type(struct policydb *policydb,
 	size_t suffix_max;
 	size_t prefix_min;
 	size_t suffix_min;
-	char *name_copy = NULL;
 	size_t name_len = strlen(objname);
 
 	/*
@@ -1707,46 +1706,37 @@ static int filename_compute_type(struct policydb *policydb,
 		goto found;
 
 	/* Search for prefix rules */
-	if (policydb->filename_trans_name_len_max[FILENAME_TRANS_MATCH_PREFIX] &&
-	    name_len >= policydb->filename_trans_name_len_min[FILENAME_TRANS_MATCH_PREFIX]) {
-		prefix_max = min(name_len, policydb->filename_trans_name_len_max[FILENAME_TRANS_MATCH_PREFIX]);
-		prefix_min = policydb->filename_trans_name_len_min[FILENAME_TRANS_MATCH_PREFIX];
-		/* filename rule with name length 0 is invalid */
-		for (i = prefix_max; i >= prefix_min; i--) {
-			ft.name_len = i;
-			datum = policydb_filenametr_search(policydb,
-							   FILENAME_TRANS_MATCH_PREFIX,
-							   &ft, stype);
-			if (datum)
-				goto found;
-		}
+	prefix_max = min(name_len, policydb->filename_trans_name_len_max[FILENAME_TRANS_MATCH_PREFIX]);
+	prefix_min = policydb->filename_trans_name_len_min[FILENAME_TRANS_MATCH_PREFIX];
+	/* filename rule with name length 0 is invalid */
+	for (i = prefix_max; i >= prefix_min; i--) {
+		ft.name_len = i;
+		datum = policydb_filenametr_search(policydb,
+						   FILENAME_TRANS_MATCH_PREFIX,
+						   &ft, stype);
+		if (datum)
+			goto found;
 	}
 
 	/* Search for suffix rules */
-	if (policydb->filename_trans_name_len_max[FILENAME_TRANS_MATCH_SUFFIX] &&
-	    name_len >= policydb->filename_trans_name_len_min[FILENAME_TRANS_MATCH_SUFFIX]) {
-		if (name_len > policydb->filename_trans_name_len_max[FILENAME_TRANS_MATCH_SUFFIX]) {
-			suffix_min = name_len - policydb->filename_trans_name_len_max[FILENAME_TRANS_MATCH_SUFFIX];
-		} else {
-			suffix_min = 0;
-		}
-		suffix_max = name_len - policydb->filename_trans_name_len_min[FILENAME_TRANS_MATCH_SUFFIX];
-		for (i = suffix_min; i <= suffix_max; i++) {
-			ft.name = &objname[i];
-			ft.name_len = name_len - i;
-			datum = policydb_filenametr_search(policydb,
-							   FILENAME_TRANS_MATCH_SUFFIX,
-							   &ft, stype);
-			if (datum)
-				goto found;
-		}
+	if (name_len > policydb->filename_trans_name_len_max[FILENAME_TRANS_MATCH_SUFFIX])
+		suffix_min = name_len - policydb->filename_trans_name_len_max[FILENAME_TRANS_MATCH_SUFFIX];
+	else
+		suffix_min = 0;
+	suffix_max = name_len - policydb->filename_trans_name_len_min[FILENAME_TRANS_MATCH_SUFFIX];
+	for (i = suffix_min; i <= suffix_max; i++) {
+		ft.name = &objname[i];
+		ft.name_len = name_len - i;
+		datum = policydb_filenametr_search(policydb,
+						   FILENAME_TRANS_MATCH_SUFFIX,
+						   &ft, stype);
+		if (datum)
+			goto found;
 	}
-	kfree(name_copy);
 	return 0;
 
 found:
 	newcontext->type = datum->otype;
-	kfree(name_copy);
 	return 0;
 }
 
