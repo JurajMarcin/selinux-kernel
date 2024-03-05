@@ -276,8 +276,8 @@ struct policydb {
 	/* only used if policyvers < POLICYDB_VERSION_COMP_FTRANS */
 	u32 compat_filename_trans_count;
 	/* lenghts of prefix/suffix rules to optimze for long filenames */
-	u32 filename_trans_name_len_max[FILENAME_TRANS_MATCH_NUM];
-	u32 filename_trans_name_len_min[FILENAME_TRANS_MATCH_NUM];
+	u32 filename_trans_name_max[FILENAME_TRANS_MATCH_NUM];
+	u32 filename_trans_name_min[FILENAME_TRANS_MATCH_NUM];
 
 	/* bools indexed by (value - 1) */
 	struct cond_bool_datum **bool_val_to_struct;
