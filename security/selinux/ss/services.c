@@ -1707,8 +1707,11 @@ static int filename_compute_type(struct policydb *policydb,
 		goto found;
 
 	/* Search for prefix rules */
-	prefix_max = min(objname_len, policydb->filename_trans_name_len_max[FILENAME_TRANS_MATCH_PREFIX]);
-	prefix_min = policydb->filename_trans_name_len_min[FILENAME_TRANS_MATCH_PREFIX];
+	prefix_max = min(
+		objname_len,
+		policydb->filename_trans_name_max[FILENAME_TRANS_MATCH_PREFIX]);
+	prefix_min =
+		policydb->filename_trans_name_min[FILENAME_TRANS_MATCH_PREFIX];
 	/* filename rule with name length 0 is invalid */
 	for (prefix_len = prefix_max; prefix_len >= prefix_min; prefix_len--) {
 		ft.name_len = prefix_len;
@@ -1720,8 +1723,11 @@ static int filename_compute_type(struct policydb *policydb,
 	}
 
 	/* Search for suffix rules */
-	suffix_max = min(objname_len, policydb->filename_trans_name_len_max[FILENAME_TRANS_MATCH_SUFFIX]);
-	suffix_min = policydb->filename_trans_name_len_min[FILENAME_TRANS_MATCH_SUFFIX];
+	suffix_max = min(
+		objname_len,
+		policydb->filename_trans_name_max[FILENAME_TRANS_MATCH_SUFFIX]);
+	suffix_min =
+		policydb->filename_trans_name_min[FILENAME_TRANS_MATCH_SUFFIX];
 	for (suffix_len = suffix_max; suffix_len >= suffix_min; suffix_len--) {
 		ft.name = &objname[objname_len - suffix_len];
 		ft.name_len = suffix_len;

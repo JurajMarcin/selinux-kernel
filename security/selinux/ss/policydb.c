@@ -563,9 +563,8 @@ static void policydb_init(struct policydb *p)
 	ebitmap_init(&p->policycaps);
 	ebitmap_init(&p->permissive_map);
 
-	for (i = 0; i < FILENAME_TRANS_MATCH_NUM; i++) {
-		p->filename_trans_name_len_min[i] = U32_MAX;
-	}
+	for (i = 0; i < FILENAME_TRANS_MATCH_NUM; i++)
+		p->filename_trans_name_min[i] = U32_MAX;
 }
 
 /*
@@ -2059,10 +2058,10 @@ static int filename_trans_read_helper(struct policydb *p, void *fp,
 		return rc;
 
 	/* save name len to limit prefix/suffix lookups later */
-	if (len > p->filename_trans_name_len_max[match_type])
-		p->filename_trans_name_len_max[match_type] = len;
-	if (len < p->filename_trans_name_len_min[match_type])
-		p->filename_trans_name_len_min[match_type] = len;
+	if (len > p->filename_trans_name_max[match_type])
+		p->filename_trans_name_max[match_type] = len;
+	if (len < p->filename_trans_name_min[match_type])
+		p->filename_trans_name_min[match_type] = len;
 
 	rc = next_entry(buf, fp, sizeof(u32) * 3);
 	if (rc)
