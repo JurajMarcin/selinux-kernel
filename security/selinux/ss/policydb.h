@@ -275,7 +275,7 @@ struct policydb {
 	struct hashtab filename_trans[FILENAME_TRANS_MATCH_NUM];
 	/* only used if policyvers < POLICYDB_VERSION_COMP_FTRANS */
 	u32 compat_filename_trans_count;
-	/* lenghts of prefix/suffix rules to optimze for long filenames */
+	/* lengths of prefix/suffix rules to optimize for long filenames */
 	u32 filename_trans_name_max[FILENAME_TRANS_MATCH_NUM];
 	u32 filename_trans_name_min[FILENAME_TRANS_MATCH_NUM];
 

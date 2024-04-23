@@ -468,10 +468,9 @@ policydb_filenametr_search(struct policydb *p, unsigned int match_type,
 	while (datum) {
 		if (ebitmap_get_bit(&datum->stypes, stype - 1))
 			return datum;
-
 		datum = datum->next;
 	}
-	return datum;
+	return NULL;
 }
 
 static u32 rangetr_hash(const void *k)

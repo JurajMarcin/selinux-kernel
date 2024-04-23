@@ -1678,13 +1678,13 @@ static int filename_compute_type(struct policydb *policydb,
 {
 	struct filename_trans_key ft;
 	struct filename_trans_datum *datum;
-	size_t prefix_len;
-	size_t suffix_len;
-	size_t prefix_max;
-	size_t suffix_max;
-	size_t prefix_min;
-	size_t suffix_min;
-	size_t objname_len = strlen(objname);
+	u32 prefix_len;
+	u32 suffix_len;
+	u32 prefix_max;
+	u32 suffix_max;
+	u32 prefix_min;
+	u32 suffix_min;
+	u32 objname_len = strlen(objname);
 
 	/*
 	 * Most filename trans rules are going to live in specific directories
