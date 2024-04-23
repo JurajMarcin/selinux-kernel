@@ -434,11 +434,9 @@ static int filenametr_cmp(const void *k1, const void *k2)
 	if (v)
 		return v;
 
-	v = strncmp(ft1->name, ft2->name, min(ft1->name_len, ft2->name_len));
-	if (ft1->name_len == ft2->name_len || v)
-		return v;
-	/* if one name is prefix of the other, the longer is greater */
-	return (int)ft1->name_len - (int)ft2->name_len;
+	if (ft1->name_len != ft2->name_len)
+		return (int)ft1->name_len - (int)ft2->name_len;
+	return strncmp(ft1->name, ft2->name, ft1->name_len);
 }
 
 static const struct hashtab_key_params filenametr_key_params = {
