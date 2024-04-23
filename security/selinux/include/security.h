@@ -46,7 +46,6 @@
 #define POLICYDB_VERSION_INFINIBAND	     31
 #define POLICYDB_VERSION_GLBLUB		     32
 #define POLICYDB_VERSION_COMP_FTRANS	     33 /* compressed filename transitions */
-#define POLICYDB_VERSION_COMP_FTRANS	     33 /* compressed filename transitions */
 #define POLICYDB_VERSION_PREFIX_SUFFIX	     34 /* prefix/suffix filename transitions */
 
 /* Range of policy versions we understand*/
