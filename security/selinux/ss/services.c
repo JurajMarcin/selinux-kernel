@@ -1671,6 +1671,8 @@ out:
 	return -EACCES;
 }
 
+atomic_t filename_compute_counters[10] = {0};
+
 static void filename_compute_type(struct policydb *policydb,
 				  struct context *newcontext,
 				  u32 stype, u32 ttype, u16 tclass,
@@ -1691,6 +1693,7 @@ static void filename_compute_type(struct policydb *policydb,
 	 * like /dev or /var/run.  This bitmap will quickly skip rule searches
 	 * if the ttype does not contain any rules.
 	 */
+	atomic_inc(&filename_compute_counters[0]);
 	if (!ebitmap_get_bit(&policydb->filename_trans_ttypes, ttype))
 		return;
 
@@ -1699,12 +1702,14 @@ static void filename_compute_type(struct policydb *policydb,
 	ft.name = objname;
 	ft.name_len = objname_len = strlen(objname);
 
+	atomic_inc(&filename_compute_counters[1]);
 	/* Search for exact rules */
 	datum = policydb_filenametr_search(policydb, FILENAME_TRANS_MATCH_EXACT,
 					   &ft, stype);
 	if (datum)
 		goto found;
 
+	atomic_inc(&filename_compute_counters[2]);
 	/* Search for prefix rules */
 	prefix_max = min(
 		objname_len,
@@ -1713,6 +1718,7 @@ static void filename_compute_type(struct policydb *policydb,
 		policydb->filename_trans_name_min[FILENAME_TRANS_MATCH_PREFIX];
 	/* filename rule with name length 0 is invalid */
 	for (prefix_len = prefix_max; prefix_len >= prefix_min; prefix_len--) {
+		atomic_inc(&filename_compute_counters[3]);
 		ft.name_len = prefix_len;
 		datum = policydb_filenametr_search(policydb,
 						   FILENAME_TRANS_MATCH_PREFIX,
@@ -1721,6 +1727,7 @@ static void filename_compute_type(struct policydb *policydb,
 			goto found;
 	}
 
+	atomic_inc(&filename_compute_counters[4]);
 	/* Search for suffix rules */
 	suffix_max = min(
 		objname_len,
@@ -1728,6 +1735,7 @@ static void filename_compute_type(struct policydb *policydb,
 	suffix_min =
 		policydb->filename_trans_name_min[FILENAME_TRANS_MATCH_SUFFIX];
 	for (suffix_len = suffix_max; suffix_len >= suffix_min; suffix_len--) {
+		atomic_inc(&filename_compute_counters[5]);
 		ft.name = &objname[objname_len - suffix_len];
 		ft.name_len = suffix_len;
 		datum = policydb_filenametr_search(policydb,
@@ -1736,9 +1744,11 @@ static void filename_compute_type(struct policydb *policydb,
 		if (datum)
 			goto found;
 	}
+	atomic_inc(&filename_compute_counters[6]);
 	return;
 
 found:
+	atomic_inc(&filename_compute_counters[7]);
 	newcontext->type = datum->otype;
 	return;
 }

@@ -1497,6 +1497,47 @@ static const struct file_operations sel_sidtab_hash_stats_ops = {
 	.llseek		= generic_file_llseek,
 };
 
+extern atomic_t filename_compute_counters[10];
+
+static ssize_t sel_read_filename_compute_stats(struct file *filp, char __user *buf, size_t count, loff_t *ppos)
+{
+	char *page;
+	ssize_t length = 0;
+
+	page = (char *)__get_free_page(GFP_KERNEL);
+	if (!page)
+		return -ENOMEM;
+
+	rcu_read_lock();
+
+	length = 0;
+	for (size_t i = 0; i < sizeof(filename_compute_counters) / sizeof(filename_compute_counters[0]); i++) {
+		length += scnprintf(page + length, PAGE_SIZE - length, "%d\n", atomic_read(&filename_compute_counters[i]));
+	}
+
+	rcu_read_unlock();
+	if (length >= 0)
+		length = simple_read_from_buffer(buf, count, ppos, page, length);
+	free_page((unsigned long)page);
+
+	return length;
+}
+
+static ssize_t sel_write_filename_compute_stats(struct file *filep, const char __user *buf, size_t count, loff_t *ppos)
+{
+	for (size_t i = 0; i < sizeof(filename_compute_counters) / sizeof(filename_compute_counters[0]); i++) {
+		atomic_set(&filename_compute_counters[i], 0);
+	}
+
+	return count;
+}
+
+static const struct file_operations sel_filename_compute_stats_ops = {
+	.read		= sel_read_filename_compute_stats,
+	.write		= sel_write_filename_compute_stats,
+	.llseek		= generic_file_llseek,
+};
+
 static const struct file_operations sel_avc_cache_threshold_ops = {
 	.read		= sel_read_avc_cache_threshold,
 	.write		= sel_write_avc_cache_threshold,
@@ -1622,6 +1663,7 @@ static int sel_make_ss_files(struct dentry *dir)
 	unsigned int i;
 	static const struct tree_descr files[] = {
 		{ "sidtab_hash_stats", &sel_sidtab_hash_stats_ops, S_IRUGO },
+		{ "filename_compute_stats", &sel_filename_compute_stats_ops, S_IRUGO|S_IWUSR },
 	};
 
 	for (i = 0; i < ARRAY_SIZE(files); i++) {
