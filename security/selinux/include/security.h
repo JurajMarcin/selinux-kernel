@@ -257,6 +257,8 @@ void security_compute_xperms_decision(u32 ssid, u32 tsid, u16 tclass, u8 driver,
 void security_compute_av_user(u32 ssid, u32 tsid, u16 tclass,
 			      struct av_decision *avd);
 
+ssize_t security_filename_trans_stats(char *page);
+
 int security_transition_sid(u32 ssid, u32 tsid, u16 tclass,
 			    const struct qstr *qstr, u32 *out_sid);
 

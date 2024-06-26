@@ -1671,6 +1671,32 @@ out:
 	return -EACCES;
 }
 
+ssize_t security_filename_trans_stats(char *page)
+{
+	struct selinux_policy *policy;
+	ssize_t length = 0;
+
+	if (!selinux_initialized()) {
+		pr_err("SELinux: %s:  called before initial load_policy\n",
+		       __func__);
+		return -EINVAL;
+	}
+
+	rcu_read_lock();
+	policy = rcu_dereference(selinux_state.policy);
+
+	for (size_t i = 0; i < FILENAME_TRANS_MATCH_NUM; i++) {
+		length += scnprintf(page + length, PAGE_SIZE - length, "%u %u %u\n",
+				    policy->policydb.filename_trans[i].nel,
+				    policy->policydb.filename_trans_name_min[i],
+				    policy->policydb.filename_trans_name_max[i]);
+	}
+
+	rcu_read_unlock();
+
+	return length;
+}
+
 static void filename_compute_type(struct policydb *policydb,
 				  struct context *newcontext,
 				  u32 stype, u32 ttype, u16 tclass,

@@ -1508,6 +1508,35 @@ static const struct file_operations sel_avc_hash_stats_ops = {
 	.llseek		= generic_file_llseek,
 };
 
+static ssize_t sel_read_filename_trans_stats(struct file *filp,
+					     char __user *buf,
+					     size_t count,
+					     loff_t *ppos)
+{
+	char *page;
+	ssize_t length;
+
+	page = (char *)__get_free_page(GFP_KERNEL);
+	if (!page)
+		return -ENOMEM;
+
+	if (*ppos != 0)
+		return -EINVAL;
+
+	length = security_filename_trans_stats(page);
+	if (length >= 0)
+		length = simple_read_from_buffer(buf, count, ppos, page,
+						 length);
+	free_page((unsigned long)page);
+
+	return length;
+}
+
+static const struct file_operations sel_filename_trans_stats_ops = {
+	.read		= sel_read_filename_trans_stats,
+	.llseek		= generic_file_llseek,
+};
+
 #ifdef CONFIG_SECURITY_SELINUX_AVC_STATS
 static struct avc_cache_stats *sel_avc_get_stat_idx(loff_t *idx)
 {
@@ -1622,6 +1651,7 @@ static int sel_make_ss_files(struct dentry *dir)
 	unsigned int i;
 	static const struct tree_descr files[] = {
 		{ "sidtab_hash_stats", &sel_sidtab_hash_stats_ops, S_IRUGO },
+		{ "filename_trans_stats", &sel_filename_trans_stats_ops, S_IRUGO },
 	};
 
 	for (i = 0; i < ARRAY_SIZE(files); i++) {
